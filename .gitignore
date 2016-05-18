@@ -1,0 +1,13 @@
+.coverage
+cache/
+
+bin/
+dist/
+docs/_build/
+include/
+lib/
+man/
+__pycache__/
+
+*pyc
+*~
