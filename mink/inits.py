@@ -3,7 +3,8 @@ import tensorflow as tf
 
 
 class Init(BaseEstimator):
-    pass
+    def __call__(self, *args, **kwargs):
+        raise NotImplementedError
 
 
 class InitNormal(Init):

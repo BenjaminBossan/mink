@@ -3,7 +3,8 @@ import tensorflow as tf
 
 
 class Update(BaseEstimator):
-    pass
+    def __call__(self, Xs):
+        raise NotImplementedError
 
 
 class SGD(Update):
