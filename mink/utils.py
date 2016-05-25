@@ -1,3 +1,49 @@
+import numpy as np
+import tensorflow as tf
+
+
+def as_tuple(x, N, t=None):
+    """Coerce a value to a tuple of given length (and possibly given
+    type).
+
+    Parameters
+    ----------
+    x : value or iterable
+    N : integer
+        length of the desired tuple
+    t : type, optional
+        required type for all elements
+
+    Returns
+    -------
+    tuple
+        ``tuple(x)`` if `x` is iterable, ``(x,) * N`` otherwise.
+
+    Raises
+    ------
+    TypeError
+        if `type` is given and `x` or any of its elements do not match it
+
+    ValueError
+        if `x` is iterable, but does not have exactly `N` elements
+
+    """
+    try:
+        X = tuple(x)
+    except TypeError:
+        X = (x,) * N
+
+    if (t is not None) and not all(isinstance(v, t) for v in X):
+        raise TypeError("expected a single value or an iterable "
+                        "of {0}, got {1} instead".format(t.__name__, x))
+
+    if len(X) != N:
+        raise ValueError("expected a single value or an iterable "
+                         "with length {0}, got {1} instead".format(N, x))
+
+    return X
+
+
 def get_shape(placeholder):
     return tuple(placeholder.get_shape().as_list())
 
@@ -18,8 +64,17 @@ def set_named_layer_param(layer, key, value):
             return False
         else:
             # try to set on incoming layer
-            split = key.split('__')
             return set_named_layer_param(incoming, key, value)
 
     setattr(layer, end, value)
     return True
+
+
+def flatten(Xs, ndim=2):
+    shape = list(get_shape(Xs))
+    last_dim = np.prod(shape[ndim - 1:])
+    if shape[0] is None:
+        new_shape = [-1] + shape[1:ndim - 1] + [last_dim]
+    else:
+        new_shape = shape[:ndim - 1] + [last_dim]
+    return tf.reshape(Xs, new_shape)
