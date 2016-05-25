@@ -3,9 +3,11 @@ from sklearn.base import BaseEstimator
 from sklearn.base import TransformerMixin
 import tensorflow as tf
 
+from mink import inits
+from mink import nonlinearities
+from mink.utils import as_tuple
+from mink.utils import flatten
 from mink.utils import get_shape
-from mink.inits import InitNormal
-from mink.nonlinearities import Rectify
 from mink.utils import set_named_layer_param
 
 
@@ -74,6 +76,24 @@ class Layer(BaseEstimator, TransformerMixin):
         return self
 
 
+def _identity(X):
+    """The identity function.
+    """
+    return X
+
+
+class FunctionLayer(Layer):
+    def __init__(self, func=None):
+        self.func = func
+
+    def fit(self, Xs, ys=None):
+        return self
+
+    def transform(self, Xs, ys=None):
+        func = self.func if self.func is not None else _identity
+        return func(Xs)
+
+
 class InputLayer(Layer):
     def __init__(self, Xs=None, name=None):
         self.Xs = Xs
@@ -95,29 +115,94 @@ class DenseLayer(Layer):
         self,
         incoming=None,
         num_units=100,
-        nonlinearity=Rectify(),
-        W_init=InitNormal(),
-        b_init=InitNormal(),
+        nonlinearity=nonlinearities.Rectify(),
+        W=inits.GlorotUniform(),
+        b=inits.Constant(0.),
         name=None,
     ):
         self.incoming = incoming
         self.num_units = num_units
         self.nonlinearity = nonlinearity
-        self.W_init = W_init
-        self.b_init = b_init
+        self.W = W
+        self.b = b
         self.name = name
 
     def fit(self, Xs, ys=None):
         Xs_inc = self.incoming.fit_transform(Xs, ys)
 
         shape = get_shape(Xs_inc)
-        self.W_ = self.W_init((np.prod(shape[1:]), self.num_units))
-        self.b_ = self.b_init((1, self.num_units))
+        self.W_ = self.W((np.prod(shape[1:]), self.num_units))
+        self.b_ = self.b((1, self.num_units))
 
         return self
 
     def transform(self, Xs, ys=None):
         Xs_inc = self.incoming.transform(Xs)
+        if len(Xs_inc.get_shape()) > 2:
+            Xs_inc = flatten(Xs_inc, 2)
+
         X = tf.matmul(Xs_inc, self.W_)
         X += self.b_  # use tf.nn.bias_add?
         return self.nonlinearity(X)
+
+
+class Conv2DLayer(Layer):
+    def __init__(
+            self,
+            incoming,
+            num_filters=32,
+            filter_size=3,
+            stride=1,
+            padding='SAME',
+            W=inits.GlorotUniform(),
+            b=inits.Constant(0.),
+            nonlinearity=nonlinearities.Rectify(),
+    ):
+        self.incoming = incoming
+        self.num_filters = num_filters
+        self.filter_size = filter_size
+        self.stride = stride
+        self.padding = padding
+        self.W = W
+        self.b = b
+        self.nonlinearity = nonlinearity
+
+        allowed = ('SAME', 'VALID')
+        if padding not in allowed:
+            raise ValueError("`padding` must be one of {}.".format(
+                ', '.join(allowed)))
+
+    def fit(self, Xs, ys=None):
+        Xs_inc = self.incoming.fit_transform(Xs, ys)
+
+        filter_size = as_tuple(
+            self.filter_size,
+            N=2,
+            t=int,
+        )
+
+        self.strides_ = (1, self.stride, self.stride, 1)
+
+        self.W_ = self.W((
+            filter_size[0],
+            filter_size[1],
+            get_shape(Xs_inc)[3],
+            self.num_filters,
+        ))
+
+        self.b_ = self.b((self.num_filters,))
+
+        return self
+
+    def transform(self, Xs, ys=None):
+        Xs_inc = self.incoming.transform(Xs)
+
+        conved = tf.nn.conv2d(
+            Xs_inc,
+            filter=self.W_,
+            strides=self.strides_,
+            padding=self.padding,
+        )
+
+        activation = tf.nn.bias_add(conved, self.b_)
+        return self.nonlinearity(activation)
