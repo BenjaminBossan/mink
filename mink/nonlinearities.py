@@ -2,6 +2,12 @@ from sklearn.base import BaseEstimator
 import tensorflow as tf
 
 
+__all__ = [
+    'Rectify',
+    'Softmax',
+]
+
+
 class Nonlinearity(BaseEstimator):
     def __call__(self, Xs):
         raise NotImplementedError

@@ -2,6 +2,16 @@ from sklearn.base import BaseEstimator
 import tensorflow as tf
 
 
+__all__ = [
+    'Constant',
+    'Uniform',
+    'Normal',
+    'TruncatedNormal',
+    'GlorotNormal',
+    'GlorotUniform',
+]
+
+
 class Init(BaseEstimator):
     def __call__(self, *args, **kwargs):
         raise NotImplementedError

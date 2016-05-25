@@ -2,6 +2,13 @@ from sklearn.base import BaseEstimator
 import tensorflow as tf
 
 
+__all__ = [
+    'SGD',
+    'Momentum',
+    'Adam',
+]
+
+
 class Update(BaseEstimator):
     def __call__(self, Xs):
         raise NotImplementedError

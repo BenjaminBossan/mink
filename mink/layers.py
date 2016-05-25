@@ -9,6 +9,13 @@ from mink.nonlinearities import Rectify
 from mink.utils import set_named_layer_param
 
 
+__all__ = [
+    'InputLayer',
+    'DenseLayer',
+    'Conv2DLayer',
+]
+
+
 class Layer(BaseEstimator, TransformerMixin):
     def __init__(self, name=None):
         self.name = name
