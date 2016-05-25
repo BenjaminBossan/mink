@@ -26,6 +26,7 @@ class NeuralNetClassifier(BaseEstimator, TransformerMixin):
             ys=None,
             verbose=0,
             binarizer=LabelBinarizer(),
+            session_config=None,
     ):
         self.layer = layer
         self.objective = objective
@@ -36,6 +37,7 @@ class NeuralNetClassifier(BaseEstimator, TransformerMixin):
         self.ys = ys
         self.verbose = verbose
         self.binarizer = binarizer
+        self.session_config = session_config
 
     def _initialize(self, X=None, y=None):
         if getattr(self, '_initalized', None):
@@ -80,20 +82,26 @@ class NeuralNetClassifier(BaseEstimator, TransformerMixin):
         if num_epochs is None:
             num_epochs = self.max_epochs
 
-        session = tf.Session()
+        if self.session_config is None:
+            session = tf.Session()
+        else:
+            session = tf.Session(config=self.session_config)
         session.run(tf.initialize_all_variables())
         self.session_ = session
 
-        for epoch in range(num_epochs):
+        for i, epoch in enumerate(range(num_epochs)):
             losses = []
             for Xb, yb in self.batch_iterator(X, y):
                 feed_dict = {self.Xs_: Xb, self.ys_: yb}
-                session.run(self.train_step_, feed_dict=feed_dict)
+                __, loss = session.run(
+                    [self.train_step_, self.loss_],
+                    feed_dict=feed_dict,
+                )
                 if self.verbose:
-                    loss = session.run(self.loss_, feed_dict=feed_dict)
                     losses.append(loss)
             if self.verbose:
-                print(np.mean(loss))
+                # should use np.average at some point
+                print(i + 1, np.mean(loss))
 
         return self
 
