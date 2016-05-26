@@ -95,8 +95,14 @@ class FunctionLayer(Layer):
 
 
 class InputLayer(Layer):
-    def __init__(self, Xs=None, name=None):
+    def __init__(
+            self,
+            Xs=None,
+            ys=None,
+            name=None,
+    ):
         self.Xs = Xs
+        self.ys = ys
         self.name = name
 
     def fit(self, Xs, ys=None):
@@ -104,6 +110,10 @@ class InputLayer(Layer):
             self.Xs_ = Xs
         else:
             self.Xs_ = self.Xs
+        if self.ys is None:
+            self.ys_ = ys
+        else:
+            self.ys_ = self.ys
         return self
 
     def transform(self, Xs, ys=None):

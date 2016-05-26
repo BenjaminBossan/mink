@@ -78,3 +78,12 @@ def flatten(Xs, ndim=2):
     else:
         new_shape = shape[:ndim - 1] + [last_dim]
     return tf.reshape(Xs, new_shape)
+
+
+def get_input_layers(layer):
+    # will need to support case of more than one input layer
+    input_layers = []
+    while hasattr(layer, 'incoming'):
+        layer = layer.incoming
+    input_layers.append(layer)
+    return input_layers

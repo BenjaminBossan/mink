@@ -8,6 +8,7 @@ from mink.config import floatX
 from mink.nolearn import BatchIterator
 from mink.objectives import Objective
 from mink.updates import SGD
+from mink.utils import get_input_layers
 from mink.utils import set_named_layer_param
 
 
@@ -22,8 +23,6 @@ class NeuralNetClassifier(BaseEstimator, TransformerMixin):
             update=SGD(),
             batch_iterator=BatchIterator(256),
             max_epochs=10,
-            Xs=None,
-            ys=None,
             verbose=0,
             binarizer=LabelBinarizer(),
             session_config=None,
@@ -33,26 +32,21 @@ class NeuralNetClassifier(BaseEstimator, TransformerMixin):
         self.update = update
         self.batch_iterator = batch_iterator
         self.max_epochs = max_epochs
-        self.Xs = Xs
-        self.ys = ys
         self.verbose = verbose
         self.binarizer = binarizer
         self.session_config = session_config
 
-    def _initialize(self, X=None, y=None):
+    def _initialize(self, X, y):
         if getattr(self, '_initalized', None):
             return
 
-        if (X is None) and (self.Xs is None):
-            raise ValueError
-        if (y is None) and (self.ys is None):
-            raise ValueError
+        input_layer = get_input_layers(self.layer)[0]
 
-        Xs = self.Xs or tf.placeholder(
+        Xs = input_layer.Xs or tf.placeholder(
             dtype=floatX,
             shape=[None] + list(X.shape[1:]),
         )
-        ys = self.ys or tf.placeholder(
+        ys = input_layer.ys or tf.placeholder(
             dtype=floatX,
             shape=[None] + list(y.shape[1:]),
         )
