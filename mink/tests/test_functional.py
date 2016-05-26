@@ -76,6 +76,20 @@ class TestSetParams:
         assert l0.Xs == 777
 
 
+class TestNeuralNetFit:
+    def test_call_fit_repeatedly(self, clf_net, clf_data):
+        X, y = clf_data
+
+        clf_net.fit(X, y, num_epochs=15)
+        accuracy_before = (y == clf_net.predict(X)).mean()
+
+        clf_net.fit(X, y, num_epochs=5)
+        accuracy_after = (y == clf_net.predict(X)).mean()
+
+        # after continuing fit, accuracy should decrease
+        assert accuracy_after < accuracy_before
+
+
 class TestGridSearch:
     @pytest.fixture
     def param_grid(self):

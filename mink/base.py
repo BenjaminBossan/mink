@@ -55,12 +55,19 @@ class NeuralNetClassifier(BaseEstimator, TransformerMixin):
         loss = self.objective(ys, ys_proba)
         train_step = self.update(loss)
 
+        if self.session_config is None:
+            session = tf.Session()
+        else:
+            session = tf.Session(config=self.session_config)
+        session.run(tf.initialize_all_variables())
+
         self.loss_ = loss
         self.train_step_ = train_step
         self.Xs_ = Xs
         self.ys_ = ys
         self._predict_proba = ys_proba
         self._initialized = True
+        self.session_ = session
 
     @property
     def classes_(self):
@@ -76,18 +83,11 @@ class NeuralNetClassifier(BaseEstimator, TransformerMixin):
         if num_epochs is None:
             num_epochs = self.max_epochs
 
-        if self.session_config is None:
-            session = tf.Session()
-        else:
-            session = tf.Session(config=self.session_config)
-        session.run(tf.initialize_all_variables())
-        self.session_ = session
-
         for i, epoch in enumerate(range(num_epochs)):
             losses = []
             for Xb, yb in self.batch_iterator(X, y):
                 feed_dict = {self.Xs_: Xb, self.ys_: yb}
-                __, loss = session.run(
+                __, loss = self.session_.run(
                     [self.train_step_, self.loss_],
                     feed_dict=feed_dict,
                 )
