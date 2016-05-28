@@ -2,6 +2,7 @@ import numpy as np
 import pytest
 from sklearn.grid_search import GridSearchCV
 from sklearn.metrics import accuracy_score
+from sklearn.metrics import mean_squared_error
 from unittest.mock import Mock
 
 from mink import NeuralNetClassifier
@@ -9,11 +10,11 @@ from mink.layers import DenseLayer
 from mink.layers import InputLayer
 
 
-def test_call_fit_with_custom_session(clf_layers, clf_data):
+def test_call_fit_with_custom_session(_layers, clf_data):
     X, y = clf_data
     mock_session = Mock()
     mock_session.run.return_value = [0, 1]
-    net = NeuralNetClassifier(clf_layers, session=mock_session)
+    net = NeuralNetClassifier(_layers, session=mock_session)
     net.fit(X, y, num_epochs=13)
 
     # Call count of session.run is 1 [initialze variables] + number of
@@ -140,3 +141,16 @@ class TestNeuralNetClassifier:
         score_after = accuracy_score(y, clf_net.predict(X))
         min_improvement = score_before * (1 - score_before)
         assert score_after > score_before + min_improvement
+
+
+class TestNeuralNetRegressor:
+    def test_neural_net_regressor_learns(self, regr_net, regr_data):
+        X, y = regr_data
+
+        regr_net.fit(X, y, num_epochs=0)
+        score_before = mean_squared_error(y, regr_net.predict(X))
+        assert np.isclose(score_before, (y ** 2).mean(), rtol=0.2)
+
+        regr_net.fit(X, y, num_epochs=10)
+        score_after = mean_squared_error(y, regr_net.predict(X))
+        assert score_after < 0.01 * score_before

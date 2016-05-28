@@ -13,6 +13,11 @@ class Nonlinearity(BaseEstimator):
         raise NotImplementedError
 
 
+class Linear(Nonlinearity):
+    def __call__(self, Xs):
+        return Xs
+
+
 class Rectify(Nonlinearity):
     def __call__(self, Xs):
         return tf.nn.relu(Xs)

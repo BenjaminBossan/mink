@@ -7,15 +7,15 @@ import tensorflow as tf
 from mink.config import floatX
 from mink.layers import DenseLayer
 from mink.nolearn import BatchIterator
-from mink.nonlinearities import Softmax
-from mink.objectives import CrossEntropy
+from mink import nonlinearities
+from mink import objectives
 from mink.updates import SGD
 from mink.utils import get_input_layers
 from mink.utils import get_shape
 from mink.utils import set_named_layer_param
 
 
-__all__ = ['NeuralNetClassifier']
+__all__ = ['NeuralNetClassifier', 'NeuralNetRegressor']
 
 
 class NeuralNetBase(BaseEstimator, TransformerMixin):
@@ -23,21 +23,12 @@ class NeuralNetBase(BaseEstimator, TransformerMixin):
         if getattr(self, '_initalized', None):
             return
 
-        input_layer = get_input_layers(self.layer)[0]
-
-        Xs = input_layer.Xs or tf.placeholder(
-            dtype=floatX,
-            shape=[None] + list(X.shape[1:]),
-        )
-        ys = input_layer.ys or tf.placeholder(
-            dtype=floatX,
-            shape=[None] + [len(np.unique(y))]
-        )
+        Xs, ys = self._get_Xs_ys(X, y)
 
         self._initialize_output_layer(self.layer, Xs, ys)
-        ys_proba = self.layer.fit_transform(Xs)
+        ys_transformed = self.layer.fit_transform(Xs)
 
-        loss = self.objective(ys, ys_proba)
+        loss = self.objective(ys, ys_transformed)
         train_step = self.update(loss)
 
         if self.session is None:
@@ -46,50 +37,46 @@ class NeuralNetBase(BaseEstimator, TransformerMixin):
             self.session_ = self.session
         self.session_.run(tf.initialize_all_variables())
 
-        self._initialize_encoder(y)
+        if self.encoder:
+            self.encoder.fit(y)
 
         self.loss_ = loss
         self.train_step_ = train_step
         self.Xs_ = Xs
         self.ys_ = ys
-        self._predict_proba = ys_proba
+        self.predict_func_ = ys_transformed
         self._initialized = True
 
     def fit(self, X, yt, num_epochs=None):
         self._initialize(X, yt)
         if self.encoder:
             y = self.encoder.transform(yt)
+            if y.shape[1] == 1:  # binary classification:
+                y = np.hstack((1.0 - y, y))
         else:
             y = yt
 
         if num_epochs is None:
             num_epochs = self.max_epochs
 
+        template = "epochs: {:>4} | loss: {:.5f}"
+
         for i, epoch in enumerate(range(num_epochs)):
             losses = []
             for Xb, yb in self.batch_iterator(X, y):
+                inputs = [self.train_step_, self.loss_]
                 feed_dict = {self.Xs_: Xb, self.ys_: yb}
                 __, loss = self.session_.run(
-                    [self.train_step_, self.loss_],
+                    inputs,
                     feed_dict=feed_dict,
                 )
                 if self.verbose:
                     losses.append(loss)
             if self.verbose:
                 # TODO: should use np.average at some point
-                print(i + 1, np.mean(loss))
+                print(template.format(i + 1, np.mean(loss)))
 
         return self
-
-    def predict_proba(self, X):
-        session = self.session_
-        y_proba = []
-
-        for Xb, __ in self.batch_iterator(X):
-            feed_dict = {self.Xs_: Xb}
-            y_proba.append(
-                session.run(self._predict_proba, feed_dict=feed_dict))
-        return np.vstack(y_proba)
 
     def predict(self, X):
         raise NotImplementedError
@@ -146,7 +133,7 @@ class NeuralNetClassifier(NeuralNetBase):
     def __init__(
             self,
             layer,
-            objective=CrossEntropy(),
+            objective=objectives.CrossEntropy(),
             update=SGD(),
             batch_iterator=BatchIterator(256),
             max_epochs=10,
@@ -169,16 +156,91 @@ class NeuralNetClassifier(NeuralNetBase):
             if (layer.num_units is None) and (len(ys_shape) == 2):
                 layer.set_params(num_units=ys_shape[1])
             if layer.nonlinearity is None:
-                layer.set_params(nonlinearity=Softmax())
+                layer.set_params(nonlinearity=nonlinearities.Softmax())
 
-    def _initialize_encoder(self, y):
-        if self.encoder:
-            return self.encoder.fit(y)
+    def _get_Xs_ys(self, X, y):
+        input_layer = get_input_layers(self.layer)[0]
+
+        Xs = input_layer.Xs or tf.placeholder(
+            dtype=floatX,
+            shape=[None] + list(X.shape[1:]),
+        )
+        ys = input_layer.ys or tf.placeholder(
+            dtype=floatX,
+            shape=[None] + [len(np.unique(y))]
+        )
+        return Xs, ys
 
     @property
     def classes_(self):
         return self.encoder.classes_
 
+    def predict_proba(self, X):
+        session = self.session_
+        y_proba = []
+
+        for Xb, __ in self.batch_iterator(X):
+            feed_dict = {self.Xs_: Xb}
+            y_proba.append(
+                session.run(self.predict_func_, feed_dict=feed_dict))
+        return np.vstack(y_proba)
+
     def predict(self, X):
         y_proba = self.predict_proba(X)
         return np.argmax(y_proba, axis=1)
+
+
+class NeuralNetRegressor(NeuralNetBase):
+    def __init__(
+            self,
+            layer,
+            objective=objectives.MeanSquaredError(),
+            update=SGD(),
+            batch_iterator=BatchIterator(256),
+            max_epochs=10,
+            verbose=0,
+            encoder=None,
+            session=None,
+    ):
+        self.layer = layer
+        self.objective = objective
+        self.update = update
+        self.batch_iterator = batch_iterator
+        self.max_epochs = max_epochs
+        self.verbose = verbose
+        self.encoder = encoder
+        self.session = session
+
+    def _initialize_output_layer(self, layer, Xs, ys):
+        if isinstance(layer, DenseLayer):
+            ys_shape = get_shape(ys)
+            if (layer.num_units is None) and (len(ys_shape) == 2):
+                if ys_shape[1] > 1:
+                    raise ValueError("Multioutput regression currently not "
+                                     "supported.")
+                layer.set_params(num_units=ys_shape[1])
+            if layer.nonlinearity is None:
+                layer.set_params(nonlinearity=nonlinearities.Linear())
+
+    def _get_Xs_ys(self, X, y):
+        input_layer = get_input_layers(self.layer)[0]
+
+        Xs = input_layer.Xs or tf.placeholder(
+            dtype=floatX,
+            shape=[None] + list(X.shape[1:]),
+        )
+        ys = input_layer.ys or tf.placeholder(
+            dtype=floatX,
+            shape=[None, 1]  # TODO: Multioutput not supported yet
+        )
+        return Xs, ys
+
+    def predict(self, X):
+        session = self.session_
+        y_pred = []
+
+        for Xb, __ in self.batch_iterator(X):
+            feed_dict = {self.Xs_: Xb}
+            y_pred.append(
+                session.run(self.predict_func_, feed_dict=feed_dict))
+        return np.vstack(y_pred)
