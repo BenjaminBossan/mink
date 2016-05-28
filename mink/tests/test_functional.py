@@ -1,9 +1,37 @@
 import pytest
 from sklearn.grid_search import GridSearchCV
+from unittest.mock import Mock
 
 from mink import NeuralNetClassifier
 from mink.layers import DenseLayer
 from mink.layers import InputLayer
+
+
+def test_call_fit_with_custom_session(clf_layers, clf_data):
+    X, y = clf_data
+    mock_session = Mock()
+    mock_session.run.return_value = [0, 1]
+    net = NeuralNetClassifier(clf_layers, session=mock_session)
+    net.fit(X, y, num_epochs=13)
+
+    # Call count of session.run is 1 [initialze variables] + number of
+    # epochs * number of batches.
+    expected_call_count = 1 + 13 * (
+        X.shape[0] // net.batch_iterator.batch_size + 1)
+    assert mock_session.run.call_count == expected_call_count
+
+
+def test_call_fit_repeatedly(clf_net, clf_data):
+    X, y = clf_data
+
+    clf_net.fit(X, y, num_epochs=15)
+    accuracy_before = (y == clf_net.predict(X)).mean()
+
+    clf_net.fit(X, y, num_epochs=5)
+    accuracy_after = (y == clf_net.predict(X)).mean()
+
+    # after continuing fit, accuracy should decrease
+    assert accuracy_after < accuracy_before
 
 
 class TestSetParams:
@@ -74,20 +102,6 @@ class TestSetParams:
 
         l2.set_params(l2__incoming__Xs=777)
         assert l0.Xs == 777
-
-
-class TestNeuralNetFit:
-    def test_call_fit_repeatedly(self, clf_net, clf_data):
-        X, y = clf_data
-
-        clf_net.fit(X, y, num_epochs=15)
-        accuracy_before = (y == clf_net.predict(X)).mean()
-
-        clf_net.fit(X, y, num_epochs=5)
-        accuracy_after = (y == clf_net.predict(X)).mean()
-
-        # after continuing fit, accuracy should decrease
-        assert accuracy_after < accuracy_before
 
 
 class TestGridSearch:
