@@ -5,10 +5,13 @@ from sklearn.preprocessing import LabelBinarizer
 import tensorflow as tf
 
 from mink.config import floatX
+from mink.layers import DenseLayer
 from mink.nolearn import BatchIterator
+from mink.nonlinearities import Softmax
 from mink.objectives import Objective
 from mink.updates import SGD
 from mink.utils import get_input_layers
+from mink.utils import get_shape
 from mink.utils import set_named_layer_param
 
 
@@ -36,6 +39,14 @@ class NeuralNetClassifier(BaseEstimator, TransformerMixin):
         self.binarizer = binarizer
         self.session = session
 
+    def _initialize_output_layer(self, layer, Xs, ys):
+        if isinstance(layer, DenseLayer):
+            ys_shape = get_shape(ys)
+            if (layer.num_units is None) and (len(ys_shape) == 2):
+                layer.set_params(num_units=ys_shape[1])
+            if layer.nonlinearity is None:
+                layer.set_params(nonlinearity=Softmax())
+
     def _initialize(self, X, y):
         if getattr(self, '_initalized', None):
             return
@@ -50,6 +61,8 @@ class NeuralNetClassifier(BaseEstimator, TransformerMixin):
             dtype=floatX,
             shape=[None] + list(y.shape[1:]),
         )
+
+        self._initialize_output_layer(self.layer, Xs, ys)
         ys_proba = self.layer.fit_transform(Xs)
 
         loss = self.objective(ys, ys_proba)

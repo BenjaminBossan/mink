@@ -1,5 +1,7 @@
+import numpy as np
 import pytest
 from sklearn.grid_search import GridSearchCV
+from sklearn.metrics import accuracy_score
 from unittest.mock import Mock
 
 from mink import NeuralNetClassifier
@@ -124,3 +126,17 @@ class TestGridSearch:
             refit=False,
         )
         gs.fit(X, y)
+
+
+class TestNeuralNetClassifier:
+    def test_neural_net_classifier_learns(self, clf_net, clf_data):
+        X, y = clf_data
+
+        clf_net.fit(X, y, num_epochs=0)
+        score_before = accuracy_score(y, clf_net.predict(X))
+        assert np.isclose(score_before, 1.0 / len(np.unique(y)), rtol=0.2)
+
+        clf_net.fit(X, y, num_epochs=50)
+        score_after = accuracy_score(y, clf_net.predict(X))
+        min_improvement = score_before * (1 - score_before)
+        assert score_after > score_before + min_improvement

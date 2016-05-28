@@ -3,13 +3,12 @@ from sklearn.datasets import make_classification
 
 from mink import NeuralNetClassifier
 from mink import layers
-from mink import nonlinearities
 
 
 @pytest.fixture
 def clf_data():
     return make_classification(
-        n_samples=500,
+        n_samples=2000,
         n_classes=5,
         n_informative=10,
         random_state=0,
@@ -19,13 +18,8 @@ def clf_data():
 @pytest.fixture
 def clf_layers():
     l = layers.InputLayer(name='input')
-    l = layers.DenseLayer(l, name='dense')
-    l = layers.DenseLayer(
-        l,
-        num_units=5,
-        nonlinearity=nonlinearities.Softmax(),
-        name='output',
-    )
+    l = layers.DenseLayer(l, name='dense', num_units=50)
+    l = layers.DenseLayer(l, name='output')
     return l
 
 

@@ -124,8 +124,8 @@ class DenseLayer(Layer):
     def __init__(
         self,
         incoming=None,
-        num_units=100,
-        nonlinearity=nonlinearities.Rectify(),
+        num_units=None,
+        nonlinearity=None,
         W=inits.GlorotUniform(),
         b=inits.Constant(0.),
         name=None,
@@ -138,11 +138,14 @@ class DenseLayer(Layer):
         self.name = name
 
     def fit(self, Xs, ys=None):
+        self.num_units_ = self.num_units or 100
+        self.nonlinearity_ = self.nonlinearity or nonlinearities.Rectify()
+
         Xs_inc = self.incoming.fit_transform(Xs, ys)
 
         shape = get_shape(Xs_inc)
-        self.W_ = self.W((np.prod(shape[1:]), self.num_units))
-        self.b_ = self.b((1, self.num_units))
+        self.W_ = self.W((np.prod(shape[1:]), self.num_units_))
+        self.b_ = self.b((1, self.num_units_))
 
         return self
 
@@ -153,7 +156,7 @@ class DenseLayer(Layer):
 
         X = tf.matmul(Xs_inc, self.W_)
         X += self.b_  # use tf.nn.bias_add?
-        return self.nonlinearity(X)
+        return self.nonlinearity_(X)
 
 
 class Conv2DLayer(Layer):
