@@ -87,10 +87,27 @@ def flatten(Xs, ndim=2):
     return tf.reshape(Xs, new_shape)
 
 
+def dedup(lst):
+    deduped = []
+    for item in lst:
+        if item not in deduped:
+            deduped.append(item)
+    return deduped
+
+
 def get_input_layers(layer):
-    # will need to support case of more than one input layer
+    # TODO: will need to support case of more than one input layer
     input_layers = []
     while hasattr(layer, 'incoming'):
         layer = layer.incoming
     input_layers.append(layer)
-    return input_layers
+    return dedup(input_layers)
+
+
+def get_all_layers(layer):
+    # TODO: will need to support case of more than one input layer
+    layers = [layer]
+    while hasattr(layer, 'incoming'):
+        layer = layer.incoming
+        layers.append(layer)
+    return dedup(layers)

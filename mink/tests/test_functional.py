@@ -3,11 +3,37 @@ import pytest
 from sklearn.grid_search import GridSearchCV
 from sklearn.metrics import accuracy_score
 from sklearn.metrics import mean_squared_error
+import tensorflow as tf
 from unittest.mock import patch
 
 from mink import NeuralNetClassifier
 from mink.layers import DenseLayer
 from mink.layers import InputLayer
+
+
+@pytest.mark.xfail
+def test_save_load_model(clf_net, clf_data, _layers, session_kwargs, tmpdir):
+    X, y = clf_data
+    clf_net.fit(X, y, num_epochs=0)
+    score_before = accuracy_score(y, clf_net.predict(X))
+
+    clf_net.fit(X, y, num_epochs=10)
+    score_after = accuracy_score(y, clf_net.predict(X))
+    assert not np.isclose(score_before, score_after)
+
+    p = tmpdir.mkdir('mink').join('testmodel.ckpt')
+    clf_net.save_params_to(str(p))
+
+    tf.reset_default_graph()
+
+    new_net = NeuralNetClassifier(_layers, session_kwargs=session_kwargs)
+    new_net.initialize(X, y)
+    score_new = accuracy_score(y, new_net.predict(X))
+    assert not np.isclose(score_new, score_after)
+
+    new_net.load_params_from(str(p))
+    score_loaded = accuracy_score(y, new_net.predict(X))
+    assert np.isclose(score_loaded, score_after)
 
 
 def test_call_fit_with_custom_session_kwargs(_layers, clf_data):
@@ -17,7 +43,7 @@ def test_call_fit_with_custom_session_kwargs(_layers, clf_data):
     with patch('mink.base.tf.Session') as mock_session:
         from mink.base import NeuralNetClassifier
         net = NeuralNetClassifier(_layers, session_kwargs=session_kwargs)
-        net._initialize(X, y)
+        net.initialize(X, y)
 
         assert mock_session.call_args_list[0][1] == session_kwargs
 

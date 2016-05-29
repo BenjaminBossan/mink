@@ -19,7 +19,7 @@ __all__ = ['NeuralNetClassifier', 'NeuralNetRegressor']
 
 
 class NeuralNetBase(BaseEstimator, TransformerMixin):
-    def _initialize(self, X, y):
+    def initialize(self, X, y):
         if getattr(self, '_initalized', None):
             return
 
@@ -57,7 +57,7 @@ class NeuralNetBase(BaseEstimator, TransformerMixin):
         if yt.ndim == 1:
             yt = yt.reshape(-1, 1)
 
-        self._initialize(X, yt)
+        self.initialize(X, yt)
 
         if self.encoder:
             y = self.encoder.transform(yt)
@@ -150,6 +150,24 @@ class NeuralNetBase(BaseEstimator, TransformerMixin):
                         error_msg.format(key, self.__class__.__name__))
                 setattr(self, key, value)
         return self
+
+    def save_params_to(self, path):
+        saver = tf.train.Saver()
+        saver.save(self.session_, path)
+        if self.verbose:
+            print("Saved model in {}.".format(path))
+
+    def load_params_from(self, path):
+        raise NotImplementedError("Saving and restoring not properly "
+                                  "implemented yet.")
+
+        if not hasattr(self, '_initialized'):
+            raise AttributeError("Before loading, you need to initialize "
+                                 "the model, e.g. 'net.initialize(X, y)'.")
+        saver = tf.train.Saver()
+        saver.restore(self.session_, path)
+        if self.verbose:
+            print("Loaded model from {}.".format(path))
 
 
 class NeuralNetClassifier(NeuralNetBase):
