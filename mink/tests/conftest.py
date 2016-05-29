@@ -1,10 +1,17 @@
 import pytest
 from sklearn.datasets import make_classification
 from sklearn.datasets import make_regression
+import tensorflow as tf
 
 from mink import NeuralNetClassifier
 from mink import NeuralNetRegressor
 from mink import layers
+
+
+@pytest.fixture
+def session_kwargs():
+    gpu_options = tf.GPUOptions(per_process_gpu_memory_fraction=0.25)
+    return {'config': tf.ConfigProto(gpu_options=gpu_options)}
 
 
 @pytest.fixture
@@ -37,12 +44,12 @@ def _layers():
 
 
 @pytest.fixture
-def clf_net(_layers):
-    return NeuralNetClassifier(layer=_layers)
+def clf_net(_layers, session_kwargs):
+    return NeuralNetClassifier(layer=_layers, session_kwargs=session_kwargs)
 
 
 @pytest.fixture
-def regr_net(_layers):
-    net = NeuralNetRegressor(layer=_layers)
+def regr_net(_layers, session_kwargs):
+    net = NeuralNetRegressor(layer=_layers, session_kwargs=session_kwargs)
     net.set_params(update__learning_rate=0.001)
     return net

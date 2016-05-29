@@ -3,25 +3,23 @@ import pytest
 from sklearn.grid_search import GridSearchCV
 from sklearn.metrics import accuracy_score
 from sklearn.metrics import mean_squared_error
-from unittest.mock import Mock
+from unittest.mock import patch
 
 from mink import NeuralNetClassifier
 from mink.layers import DenseLayer
 from mink.layers import InputLayer
 
 
-def test_call_fit_with_custom_session(_layers, clf_data):
+def test_call_fit_with_custom_session_kwargs(_layers, clf_data):
     X, y = clf_data
-    mock_session = Mock()
-    mock_session.run.return_value = [0, 1]
-    net = NeuralNetClassifier(_layers, session=mock_session)
-    net.fit(X, y, num_epochs=13)
+    session_kwargs = {'a': 'b'}
 
-    # Call count of session.run is 1 [initialze variables] + number of
-    # epochs * number of batches.
-    expected_call_count = 1 + 13 * (
-        X.shape[0] // net.batch_iterator.batch_size + 1)
-    assert mock_session.run.call_count == expected_call_count
+    with patch('mink.base.tf.Session') as mock_session:
+        from mink.base import NeuralNetClassifier
+        net = NeuralNetClassifier(_layers, session_kwargs=session_kwargs)
+        net._initialize(X, y)
+
+        assert mock_session.call_args_list[0][1] == session_kwargs
 
 
 def test_call_fit_repeatedly(clf_net, clf_data):
@@ -107,7 +105,7 @@ class TestSetParams:
         assert l0.Xs == 777
 
 
-class TestGridSearch:
+class TestSklearnCompatibility:
     @pytest.fixture
     def param_grid(self):
         return {
@@ -135,7 +133,7 @@ class TestNeuralNetClassifier:
 
         clf_net.fit(X, y, num_epochs=0)
         score_before = accuracy_score(y, clf_net.predict(X))
-        assert np.isclose(score_before, 1.0 / len(np.unique(y)), rtol=0.2)
+        assert np.isclose(score_before, 1.0 / len(np.unique(y)), rtol=0.3)
 
         clf_net.fit(X, y, num_epochs=50)
         score_after = accuracy_score(y, clf_net.predict(X))

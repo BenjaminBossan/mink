@@ -44,6 +44,13 @@ def as_tuple(x, N, t=None):
     return X
 
 
+def as_4d(x):
+    if not isinstance(x, (list, tuple)):
+        return (1, x, x, 1)
+    else:
+        return x
+
+
 def get_shape(placeholder):
     return tuple(placeholder.get_shape().as_list())
 

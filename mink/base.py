@@ -24,17 +24,19 @@ class NeuralNetBase(BaseEstimator, TransformerMixin):
             return
 
         Xs, ys = self._get_Xs_ys(X, y)
+        deterministic = tf.placeholder(bool)
 
         self._initialize_output_layer(self.layer, Xs, ys)
-        ys_transformed = self.layer.fit_transform(Xs)
 
-        loss = self.objective(ys, ys_transformed)
+        ys_ff = self.layer.fit_transform(Xs, ys, deterministic=deterministic)
+        loss = self.objective(ys, ys_ff)
         train_step = self.update(loss)
 
-        if self.session is None:
-            self.session_ = tf.Session()
+        # TODO: Only initialize required variables?
+        if self.session_kwargs:
+            self.session_ = tf.Session(**self.session_kwargs)
         else:
-            self.session_ = self.session
+            self.session_ = tf.Session()
         self.session_.run(tf.initialize_all_variables())
 
         if self.encoder:
@@ -44,11 +46,18 @@ class NeuralNetBase(BaseEstimator, TransformerMixin):
         self.train_step_ = train_step
         self.Xs_ = Xs
         self.ys_ = ys
-        self.predict_func_ = ys_transformed
+        self.feed_forward_ = ys_ff
         self._initialized = True
 
+    def _get_Xs_ys(self, X, y):
+        raise NotImplementedError
+
     def fit(self, X, yt, num_epochs=None):
+        if yt.ndim == 1:
+            yt = yt.reshape(-1, 1)
+
         self._initialize(X, yt)
+
         if self.encoder:
             y = self.encoder.transform(yt)
             if y.shape[1] == 1:  # binary classification:
@@ -59,6 +68,13 @@ class NeuralNetBase(BaseEstimator, TransformerMixin):
         if num_epochs is None:
             num_epochs = self.max_epochs
 
+        try:
+            self.train_loop(X, y, num_epochs=num_epochs)
+        except KeyboardInterrupt:
+            pass
+        return self
+
+    def train_loop(self, X, y, num_epochs):
         template = "epochs: {:>4} | loss: {:.5f}"
 
         for i, epoch in enumerate(range(num_epochs)):
@@ -139,7 +155,7 @@ class NeuralNetClassifier(NeuralNetBase):
             max_epochs=10,
             verbose=0,
             encoder=LabelBinarizer(),
-            session=None,
+            session_kwargs=None,
     ):
         self.layer = layer
         self.objective = objective
@@ -148,7 +164,7 @@ class NeuralNetClassifier(NeuralNetBase):
         self.max_epochs = max_epochs
         self.verbose = verbose
         self.encoder = encoder
-        self.session = session
+        self.session_kwargs = session_kwargs
 
     def _initialize_output_layer(self, layer, Xs, ys):
         if isinstance(layer, DenseLayer):
@@ -182,7 +198,7 @@ class NeuralNetClassifier(NeuralNetBase):
         for Xb, __ in self.batch_iterator(X):
             feed_dict = {self.Xs_: Xb}
             y_proba.append(
-                session.run(self.predict_func_, feed_dict=feed_dict))
+                session.run(self.feed_forward_, feed_dict=feed_dict))
         return np.vstack(y_proba)
 
     def predict(self, X):
@@ -200,7 +216,7 @@ class NeuralNetRegressor(NeuralNetBase):
             max_epochs=10,
             verbose=0,
             encoder=None,
-            session=None,
+            session_kwargs=None,
     ):
         self.layer = layer
         self.objective = objective
@@ -209,7 +225,7 @@ class NeuralNetRegressor(NeuralNetBase):
         self.max_epochs = max_epochs
         self.verbose = verbose
         self.encoder = encoder
-        self.session = session
+        self.session_kwargs = session_kwargs
 
     def _initialize_output_layer(self, layer, Xs, ys):
         if isinstance(layer, DenseLayer):
@@ -242,5 +258,5 @@ class NeuralNetRegressor(NeuralNetBase):
         for Xb, __ in self.batch_iterator(X):
             feed_dict = {self.Xs_: Xb}
             y_pred.append(
-                session.run(self.predict_func_, feed_dict=feed_dict))
+                session.run(self.feed_forward_, feed_dict=feed_dict))
         return np.vstack(y_pred)
