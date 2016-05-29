@@ -46,6 +46,7 @@ class NeuralNetBase(BaseEstimator, TransformerMixin):
         self.train_step_ = train_step
         self.Xs_ = Xs
         self.ys_ = ys
+        self.deterministic_ = deterministic
         self.feed_forward_ = ys_ff
         self._initialized = True
 
@@ -81,11 +82,17 @@ class NeuralNetBase(BaseEstimator, TransformerMixin):
             losses = []
             for Xb, yb in self.batch_iterator(X, y):
                 inputs = [self.train_step_, self.loss_]
-                feed_dict = {self.Xs_: Xb, self.ys_: yb}
+                feed_dict = {
+                    self.Xs_: Xb,
+                    self.ys_: yb,
+                    self.deterministic_: False,
+                }
+
                 __, loss = self.session_.run(
                     inputs,
                     feed_dict=feed_dict,
                 )
+
                 if self.verbose:
                     losses.append(loss)
             if self.verbose:
@@ -196,7 +203,7 @@ class NeuralNetClassifier(NeuralNetBase):
         y_proba = []
 
         for Xb, __ in self.batch_iterator(X):
-            feed_dict = {self.Xs_: Xb}
+            feed_dict = {self.Xs_: Xb, self.deterministic_: True}
             y_proba.append(
                 session.run(self.feed_forward_, feed_dict=feed_dict))
         return np.vstack(y_proba)
@@ -256,7 +263,7 @@ class NeuralNetRegressor(NeuralNetBase):
         y_pred = []
 
         for Xb, __ in self.batch_iterator(X):
-            feed_dict = {self.Xs_: Xb}
+            feed_dict = {self.Xs_: Xb, self.deterministic_: True}
             y_pred.append(
                 session.run(self.feed_forward_, feed_dict=feed_dict))
         return np.vstack(y_pred)
