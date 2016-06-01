@@ -1,3 +1,5 @@
+import pickle
+
 import numpy as np
 from sklearn.base import BaseEstimator
 from sklearn.base import TransformerMixin
@@ -11,6 +13,7 @@ from mink import nonlinearities
 from mink import objectives
 from mink.updates import SGD
 from mink.utils import get_input_layers
+from mink.utils import get_all_layers
 from mink.utils import get_shape
 from mink.utils import set_named_layer_param
 
@@ -151,23 +154,44 @@ class NeuralNetBase(BaseEstimator, TransformerMixin):
                 setattr(self, key, value)
         return self
 
-    def save_params_to(self, path):
-        saver = tf.train.Saver()
-        saver.save(self.session_, path)
-        if self.verbose:
-            print("Saved model in {}.".format(path))
+    def save_params(self, path):
+        all_layers = get_all_layers(self.layer)
+        all_params = []
+        for layer in all_layers:
+            if not hasattr(layer, 'params_'):
+                params = {}
+            else:
+                params = {key: val.eval(self.session_) for key, val
+                          in layer.params_.items()}
+            all_params.append(params)
 
-    def load_params_from(self, path):
-        raise NotImplementedError("Saving and restoring not properly "
-                                  "implemented yet.")
+        with open(path, 'wb') as f:
+            pickle.dump(all_params, f)
 
-        if not hasattr(self, '_initialized'):
-            raise AttributeError("Before loading, you need to initialize "
-                                 "the model, e.g. 'net.initialize(X, y)'.")
-        saver = tf.train.Saver()
-        saver.restore(self.session_, path)
-        if self.verbose:
-            print("Loaded model from {}.".format(path))
+    def load_params(self, path):
+        if getattr(self, '_initialized', None) is None:
+            raise AttributeError("Please initialize before loading "
+                                 "(e.g. net.initialize(X, y).")
+
+        all_layers = get_all_layers(self.layer)
+        with open(path, 'rb') as f:
+            all_params = pickle.load(f)
+
+        if len(all_layers) != len(all_params):
+            raise ValueError("Networks don't seem to be the same.")
+
+        for layer, params in zip(all_layers, all_params):
+            layer_params = getattr(layer, 'params_', {})
+            k0, k1 = layer_params.keys(), params.keys()
+            if k0 != k1:
+                raise KeyError(
+                    "Keys for layer {} don't seem to match: "
+                    "{} vs {}".format(layer, ', '.join(k0), ', '.join(k0)))
+
+            for key, val in params.items():
+                layer.add_param(key, layer.params_[key].assign(val))
+                # it appears that you have to eval for the effect to take place!
+                layer.params_[key].eval(session=self.session_)
 
 
 class NeuralNetClassifier(NeuralNetBase):

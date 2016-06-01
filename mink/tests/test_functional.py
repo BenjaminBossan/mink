@@ -3,7 +3,6 @@ import pytest
 from sklearn.grid_search import GridSearchCV
 from sklearn.metrics import accuracy_score
 from sklearn.metrics import mean_squared_error
-import tensorflow as tf
 from unittest.mock import patch
 
 from mink import NeuralNetClassifier
@@ -11,7 +10,6 @@ from mink.layers import DenseLayer
 from mink.layers import InputLayer
 
 
-@pytest.mark.xfail
 def test_save_load_model(clf_net, clf_data, _layers, session_kwargs, tmpdir):
     X, y = clf_data
     clf_net.fit(X, y, num_epochs=0)
@@ -22,16 +20,14 @@ def test_save_load_model(clf_net, clf_data, _layers, session_kwargs, tmpdir):
     assert not np.isclose(score_before, score_after)
 
     p = tmpdir.mkdir('mink').join('testmodel.ckpt')
-    clf_net.save_params_to(str(p))
-
-    tf.reset_default_graph()
+    clf_net.save_params(str(p))
 
     new_net = NeuralNetClassifier(_layers, session_kwargs=session_kwargs)
     new_net.initialize(X, y)
     score_new = accuracy_score(y, new_net.predict(X))
     assert not np.isclose(score_new, score_after)
 
-    new_net.load_params_from(str(p))
+    new_net.load_params(str(p))
     score_loaded = accuracy_score(y, new_net.predict(X))
     assert np.isclose(score_loaded, score_after)
 

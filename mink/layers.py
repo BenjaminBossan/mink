@@ -29,6 +29,13 @@ class Layer(BaseEstimator, TransformerMixin):
     def transform(self, Xs, ys=None, **kwargs):
         raise NotImplementedError
 
+    def add_param(self, name, value):
+        if not hasattr(self, 'params_'):
+            self.params_ = {}
+
+        self.params_[name] = value
+        self.__dict__[name] = value
+
     def set_params(self, **params):
         """Set the parameters of this estimator.
 
@@ -148,8 +155,8 @@ class DenseLayer(Layer):
         Xs_inc = self.incoming.fit_transform(Xs, ys, **kwargs)
 
         shape = get_shape(Xs_inc)
-        self.W_ = self.W((np.prod(shape[1:]), self.num_units_))
-        self.b_ = self.b((1, self.num_units_))
+        self.add_param('W_', self.W((np.prod(shape[1:]), self.num_units_)))
+        self.add_param('b_', self.b((1, self.num_units_)))
 
         return self
 
@@ -202,14 +209,14 @@ class Conv2DLayer(Layer):
 
         self.strides_ = as_4d(self.stride)
 
-        self.W_ = self.W((
+        self.add_param('W_', self.W((
             filter_size[0],
             filter_size[1],
             get_shape(Xs_inc)[3],
             self.num_filters,
-        ))
+        )))
 
-        self.b_ = self.b((self.num_filters,))
+        self.add_param('b_', self.b((self.num_filters,)))
 
         return self
 
