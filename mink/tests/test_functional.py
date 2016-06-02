@@ -10,6 +10,31 @@ from mink.layers import DenseLayer
 from mink.layers import InputLayer
 
 
+@pytest.mark.xfail
+def test_model_pickle(clf_net, clf_data, _layers, session_kwargs, tmpdir):
+    import pickle
+
+    X, y = clf_data
+    clf_net.fit(X, y, num_epochs=0)
+    score_before = accuracy_score(y, clf_net.predict(X))
+
+    clf_net.fit(X, y, num_epochs=10)
+    score_after = accuracy_score(y, clf_net.predict(X))
+    assert not np.isclose(score_before, score_after)
+
+    p = tmpdir.mkdir('mink').join('testmodel.ckpt')
+    with open(str(p), 'wb') as f:
+        pickle.dump(clf_net, f)
+
+    del clf_net
+
+    with open(str(p), 'rb') as f:
+        new_net = pickle.load(f)
+
+    score_loaded = accuracy_score(y, new_net.predict(X))
+    assert np.isclose(score_loaded, score_after)
+
+
 def test_save_load_model(clf_net, clf_data, _layers, session_kwargs, tmpdir):
     X, y = clf_data
     clf_net.fit(X, y, num_epochs=0)
