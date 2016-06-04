@@ -1,5 +1,3 @@
-import pickle
-
 import numpy as np
 from sklearn.base import BaseEstimator
 from sklearn.base import TransformerMixin
@@ -35,11 +33,11 @@ class NeuralNetBase(BaseEstimator, TransformerMixin):
         loss = self.objective(ys, ys_ff)
         train_step = self.update(loss)
 
-        # TODO: Only initialize required variables?
         if self.session_kwargs:
             self.session_ = tf.Session(**self.session_kwargs)
         else:
             self.session_ = tf.Session()
+        # TODO: Only initialize required variables?
         self.session_.run(tf.initialize_all_variables())
 
         if self.encoder:
@@ -154,7 +152,7 @@ class NeuralNetBase(BaseEstimator, TransformerMixin):
                 setattr(self, key, value)
         return self
 
-    def save_params(self, path):
+    def get_all_params(self):
         all_layers = get_all_layers(self.layer)
         all_params = []
         for layer in all_layers:
@@ -164,34 +162,42 @@ class NeuralNetBase(BaseEstimator, TransformerMixin):
                 params = {key: val.eval(self.session_) for key, val
                           in layer.params_.items()}
             all_params.append(params)
+        return all_params
 
-        with open(path, 'wb') as f:
-            pickle.dump(all_params, f)
-
-    def load_params(self, path):
-        if getattr(self, '_initialized', None) is None:
-            raise AttributeError("Please initialize before loading "
-                                 "(e.g. net.initialize(X, y).")
-
+    def set_all_params(self, all_params):
         all_layers = get_all_layers(self.layer)
-        with open(path, 'rb') as f:
-            all_params = pickle.load(f)
 
         if len(all_layers) != len(all_params):
             raise ValueError("Networks don't seem to be the same.")
 
         for layer, params in zip(all_layers, all_params):
             layer_params = getattr(layer, 'params_', {})
-            k0, k1 = layer_params.keys(), params.keys()
-            if k0 != k1:
-                raise KeyError(
-                    "Keys for layer {} don't seem to match: "
-                    "{} vs {}".format(layer, ', '.join(k0), ', '.join(k0)))
-
             for key, val in params.items():
-                layer.add_param(key, layer.params_[key].assign(val))
-                # it appears that you have to eval for the effect to take place!
-                layer.params_[key].eval(session=self.session_)
+                if layer_params:
+                    layer.add_param(
+                        key,
+                        layer.params_[key].assign(val),
+                        force=True,
+                    )
+                    # it appears that you have to eval for the effect
+                    # to take place
+                    layer.params_[key].eval(session=self.session_)
+                else:
+                    layer.add_param(key, tf.Variable(val))
+
+    def __getstate__(self):
+        state = dict(self.__dict__)
+        for key in self.__dict__:
+            if key.endswith('_'):
+                del state[key]
+        all_params = self.get_all_params()
+        state['_all_params'] = all_params
+        return state
+
+    def __setstate__(self, state):
+        all_params = state.pop('_all_params')
+        self.__dict__ = state
+        self.set_all_params(all_params)
 
 
 class NeuralNetClassifier(NeuralNetBase):

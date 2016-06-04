@@ -29,12 +29,13 @@ class Layer(BaseEstimator, TransformerMixin):
     def transform(self, Xs, ys=None, **kwargs):
         raise NotImplementedError
 
-    def add_param(self, name, value):
+    def add_param(self, name, value, force=False):
         if not hasattr(self, 'params_'):
             self.params_ = {}
 
-        self.params_[name] = value
-        self.__dict__[name] = value
+        if force or (name not in self.params_):
+            self.params_[name] = value
+            self.__dict__[name] = value
 
     def set_params(self, **params):
         """Set the parameters of this estimator.
@@ -82,6 +83,13 @@ class Layer(BaseEstimator, TransformerMixin):
                         error_msg.format(key, self.__class__.__name__))
                 setattr(self, key, value)
         return self
+
+    def __getstate__(self):
+        state = dict(self.__dict__)
+        for key in self.__dict__:
+            if key.endswith('_'):
+                del state[key]
+        return state
 
 
 def _identity(X):

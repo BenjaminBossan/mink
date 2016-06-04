@@ -1,3 +1,5 @@
+import pickle
+
 import numpy as np
 import pytest
 from sklearn.grid_search import GridSearchCV
@@ -10,51 +12,39 @@ from mink.layers import DenseLayer
 from mink.layers import InputLayer
 
 
-@pytest.mark.xfail
-def test_model_pickle(clf_net, clf_data, _layers, session_kwargs, tmpdir):
-    import pickle
+class TestSaveLoadModel:
+    def test_pickle_save_load(
+            self, clf_net, clf_data, _layers, session_kwargs, tmpdir):
+        X, y = clf_data
+        clf_net.fit(X, y, num_epochs=10)
+        score_before = accuracy_score(y, clf_net.predict(X))
 
-    X, y = clf_data
-    clf_net.fit(X, y, num_epochs=0)
-    score_before = accuracy_score(y, clf_net.predict(X))
+        p = tmpdir.mkdir('mink').join('testmodel.ckpt')
+        with open(str(p), 'wb') as f:
+            pickle.dump(clf_net, f)
+        del clf_net
 
-    clf_net.fit(X, y, num_epochs=10)
-    score_after = accuracy_score(y, clf_net.predict(X))
-    assert not np.isclose(score_before, score_after)
+        with open(str(p), 'rb') as f:
+            new_net = pickle.load(f)
 
-    p = tmpdir.mkdir('mink').join('testmodel.ckpt')
-    with open(str(p), 'wb') as f:
-        pickle.dump(clf_net, f)
+        new_net.initialize(X, y)
+        score_after = accuracy_score(y, new_net.predict(X))
+        assert np.isclose(score_after, score_before)
 
-    del clf_net
+    def test_load_params_from_other_model(
+            self, clf_net, clf_data, _layers, session_kwargs):
+        X, y = clf_data
+        clf_net.fit(X, y, num_epochs=10)
+        score_before = accuracy_score(y, clf_net.predict(X))
 
-    with open(str(p), 'rb') as f:
-        new_net = pickle.load(f)
+        new_net = NeuralNetClassifier(_layers)
+        new_net.initialize(X, y)
+        score_init = accuracy_score(y, new_net.predict(X))
+        assert not np.isclose(score_init, score_before)
 
-    score_loaded = accuracy_score(y, new_net.predict(X))
-    assert np.isclose(score_loaded, score_after)
-
-
-def test_save_load_model(clf_net, clf_data, _layers, session_kwargs, tmpdir):
-    X, y = clf_data
-    clf_net.fit(X, y, num_epochs=0)
-    score_before = accuracy_score(y, clf_net.predict(X))
-
-    clf_net.fit(X, y, num_epochs=10)
-    score_after = accuracy_score(y, clf_net.predict(X))
-    assert not np.isclose(score_before, score_after)
-
-    p = tmpdir.mkdir('mink').join('testmodel.ckpt')
-    clf_net.save_params(str(p))
-
-    new_net = NeuralNetClassifier(_layers, session_kwargs=session_kwargs)
-    new_net.initialize(X, y)
-    score_new = accuracy_score(y, new_net.predict(X))
-    assert not np.isclose(score_new, score_after)
-
-    new_net.load_params(str(p))
-    score_loaded = accuracy_score(y, new_net.predict(X))
-    assert np.isclose(score_loaded, score_after)
+        new_net.set_all_params(clf_net.get_all_params())
+        score_after = accuracy_score(y, new_net.predict(X))
+        assert np.isclose(score_after, score_before)
 
 
 def test_call_fit_with_custom_session_kwargs(_layers, clf_data):
