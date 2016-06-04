@@ -164,6 +164,23 @@ class TestSklearnCompatibility:
         gs.fit(X, y)
 
 
+class TestNeuralNetEstimators:
+    from mink import NeuralNetClassifier
+    from mink import NeuralNetRegressor
+
+    estimators = [
+        NeuralNetClassifier,
+        NeuralNetRegressor,
+    ]
+
+    @pytest.mark.skip
+    @pytest.mark.parametrize('est', estimators)
+    def test_sklearn_compatibility(self, est):
+        # requires nose
+        from sklearn.utils.estimator_checks import check_estimator
+        check_estimator(est)
+
+
 class TestNeuralNetClassifier:
     def test_neural_net_classifier_learns(self, clf_net, clf_data):
         X, y = clf_data

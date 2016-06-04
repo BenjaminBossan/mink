@@ -7,6 +7,7 @@ import tensorflow as tf
 from mink.config import floatX
 from mink.layers import DenseLayer
 from mink.nolearn import BatchIterator
+from mink import handlers
 from mink import nonlinearities
 from mink import objectives
 from mink.updates import SGD
@@ -69,6 +70,9 @@ class NeuralNetBase(BaseEstimator, TransformerMixin):
 
         if num_epochs is None:
             num_epochs = self.max_epochs
+
+        for callback in self.on_training_started:
+            callback(self)
 
         try:
             self.train_loop(X, y, num_epochs=num_epochs)
@@ -211,6 +215,7 @@ class NeuralNetClassifier(NeuralNetBase):
             verbose=0,
             encoder=LabelBinarizer(),
             session_kwargs=None,
+            on_training_started=[handlers.PrintLayerInfo()],
     ):
         self.layer = layer
         self.objective = objective
@@ -220,6 +225,7 @@ class NeuralNetClassifier(NeuralNetBase):
         self.verbose = verbose
         self.encoder = encoder
         self.session_kwargs = session_kwargs
+        self.on_training_started = on_training_started
 
     def _initialize_output_layer(self, layer, Xs, ys):
         if isinstance(layer, DenseLayer):
@@ -272,6 +278,7 @@ class NeuralNetRegressor(NeuralNetBase):
             verbose=0,
             encoder=None,
             session_kwargs=None,
+            on_training_started=[handlers.PrintLayerInfo()],
     ):
         self.layer = layer
         self.objective = objective
@@ -281,6 +288,7 @@ class NeuralNetRegressor(NeuralNetBase):
         self.verbose = verbose
         self.encoder = encoder
         self.session_kwargs = session_kwargs
+        self.on_training_started = on_training_started
 
     def _initialize_output_layer(self, layer, Xs, ys):
         if isinstance(layer, DenseLayer):

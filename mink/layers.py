@@ -1,3 +1,5 @@
+from functools import wraps
+
 import numpy as np
 from sklearn.base import BaseEstimator
 from sklearn.base import TransformerMixin
@@ -19,13 +21,21 @@ __all__ = [
 ]
 
 
-class Layer(BaseEstimator, TransformerMixin):
-    def __init__(self, name=None):
-        self.name = name
+def transform_decorator(f):
+    @wraps(f)
+    def wrapper(*args, **kwargs):
+        out = f(*args, **kwargs)
+        self = args[0]
+        self.output_shape = get_shape(out)
+        return out
+    return wrapper
 
+
+class Layer(BaseEstimator, TransformerMixin):
     def fit(self, Xs, ys, **kwargs):
         raise NotImplementedError
 
+    @transform_decorator
     def transform(self, Xs, ys=None, **kwargs):
         raise NotImplementedError
 
@@ -99,9 +109,10 @@ def _identity(X):
 
 
 class FunctionLayer(Layer):
-    def __init__(self, incoming, func=None):
+    def __init__(self, incoming, func=None, name=None):
         self.incoming = incoming
         self.func = func
+        self.name = name
 
     def fit(self, Xs, ys=None, **kwargs):
         self.incoming.fit(Xs, ys, **kwargs)
@@ -135,6 +146,7 @@ class InputLayer(Layer):
             self.ys_ = self.ys
         return self
 
+    @transform_decorator
     def transform(self, Xs, ys=None, **kwargs):
         return self.Xs_
 
@@ -168,6 +180,7 @@ class DenseLayer(Layer):
 
         return self
 
+    @transform_decorator
     def transform(self, Xs, ys=None, **kwargs):
         Xs_inc = self.incoming.transform(Xs, ys, **kwargs)
         if len(Xs_inc.get_shape()) > 2:
@@ -228,6 +241,7 @@ class Conv2DLayer(Layer):
 
         return self
 
+    @transform_decorator
     def transform(self, Xs, ys=None, **kwargs):
         Xs_inc = self.incoming.transform(Xs, ys, **kwargs)
 
@@ -270,6 +284,7 @@ class MaxPool2DLayer(Layer):
 
         return self
 
+    @transform_decorator
     def transform(self, Xs, ys=None, **kwargs):
         Xs_inc = self.incoming.transform(Xs, ys, **kwargs)
         return tf.nn.max_pool(
@@ -285,16 +300,19 @@ class DropoutLayer(Layer):
             self,
             incoming,
             p=0.5,
+            name=None,
     ):
         self.incoming = incoming
         self.p = p
+        self.name = name
 
     def fit(self, Xs, ys, **kwargs):
         self.incoming.fit(Xs, ys, **kwargs)
         return self
 
+    @transform_decorator
     def transform(self, Xs, ys=None, **kwargs):
-        Xs_inc = self.incoming.transform(Xs, **kwargs)
+        Xs_inc = self.incoming.transform(Xs, ys, **kwargs)
 
         deterministic = kwargs.get(
             'deterministic',
