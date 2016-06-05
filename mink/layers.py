@@ -324,3 +324,62 @@ class DropoutLayer(Layer):
             lambda: Xs_inc,
             lambda: tf.nn.dropout(Xs_inc, keep_prob=keep_prob),
         )
+
+
+class ConcatLayer(Layer):
+    def __init__(
+            self,
+            incomings,
+            axis=1,
+            name=None
+    ):
+        self.incomings = incomings
+        self.axis = axis
+        self.name = name
+
+    def fit(self, Xs, ys, **kwargs):
+        for incoming in self.incomings:
+            incoming.fit(Xs, ys, **kwargs)
+        return self
+
+    @transform_decorator
+    def transform(self, Xs, ys=None, **kwargs):
+        Xs_incs = [incoming.transform(Xs, ys, **kwargs) for
+                   incoming in self.incomings]
+        return tf.concat(
+            values=Xs_incs,
+            concat_dim=self.axis,
+        )
+
+
+class ImageResizeLayer(Layer):
+    def __init__(
+            self,
+            incoming,
+            scale=2,
+            resize_method=tf.image.ResizeMethod.BILINEAR,
+            name=None,
+    ):
+        self.incoming = incoming
+        self.scale = scale
+        self.resize_method = resize_method
+        self.name = name
+
+    def fit(self, Xs, ys, **kwargs):
+        Xs_inc = self.incoming.fit_transform(Xs, ys, **kwargs)
+        __, height, width, __ = get_shape(Xs_inc)
+        scale_height, scale_width = as_tuple(self.scale, 2)
+
+        self.new_height_ = int(scale_height * height)
+        self.new_width_ = int(scale_width * width)
+        return self
+
+    @transform_decorator
+    def transform(self, Xs, ys=None, **kwargs):
+        Xs_inc = self.incoming.transform(Xs, ys, **kwargs)
+        return tf.image.resize_images(
+            images=Xs_inc,
+            new_height=self.new_height_,
+            new_width=self.new_width_,
+            method=self.resize_method,
+        )
