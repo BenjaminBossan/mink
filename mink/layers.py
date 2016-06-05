@@ -261,7 +261,7 @@ class MaxPool2DLayer(Layer):
             self,
             incoming,
             pool_size=2,
-            stride=1,
+            stride=2,
             padding='SAME',
             name=None,
     ):
