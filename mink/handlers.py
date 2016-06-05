@@ -18,6 +18,9 @@ def _layer_name(layer):
 
 
 class PrintLayerInfo(object):
+    def __init__(self, tablefmt='pipe'):
+        self.tablefmt = tablefmt
+
     def __call__(self, net):
         if not net.verbose:
             return
@@ -48,9 +51,8 @@ class PrintLayerInfo(object):
                    "\n".format(num_params))
         return message
 
-    @staticmethod
-    def _get_layer_info_plain(net):
-        all_layers = get_all_layers(net.layer)[::-1]
+    def _get_layer_info_plain(self, net):
+        all_layers = get_all_layers(net.layer)
 
         nums = list(range(len(all_layers)))
         names = [_layer_name(layer) for layer in all_layers]
@@ -62,5 +64,5 @@ class PrintLayerInfo(object):
             ('name', names),
             ('size', output_shapes),
         ])
-        layer_infos = tabulate(table, 'keys')
+        layer_infos = tabulate(table, 'keys', tablefmt=self.tablefmt)
         return layer_infos
