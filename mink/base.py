@@ -28,9 +28,13 @@ class NeuralNetBase(BaseEstimator, TransformerMixin):
         Xs, ys = self._get_Xs_ys(X, y)
         deterministic = tf.placeholder(bool)
 
-        self._initialize_output_layer(self.layer, Xs, ys)
+        if isinstance(self.layer, list):
+            layer = self.layer[-1]
+        else:
+            layer = self.layer
 
-        ys_ff = self.layer.fit_transform(Xs, ys, deterministic=deterministic)
+        self._initialize_output_layer(layer, Xs, ys)
+        ys_ff = layer.fit_transform(Xs, ys, deterministic=deterministic)
         loss = self.objective(ys, ys_ff)
         train_step = self.update(loss)
 

@@ -107,7 +107,7 @@ def get_all_layers(layer):
         if layer not in known:
             known.append(layer)
         incomings += get_incomings(layer)
-    return known
+    return known[::-1]
 
 
 def get_input_layers(layer):

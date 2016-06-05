@@ -15,8 +15,8 @@ class TestGetLayers:
         A = layers.DenseLayer(B)
 
         assert get_all_layers(C) == [C]
-        assert get_all_layers(B) == [B, C]
-        assert get_all_layers(A) == [A, B, C]
+        assert get_all_layers(B) == [C, B]
+        assert get_all_layers(A) == [C, B, A]
 
     def test_get_all_layers_with_concat(self, get_all_layers):
         B = layers.InputLayer()
@@ -25,7 +25,7 @@ class TestGetLayers:
         C = layers.DenseLayer(E)
         A = layers.ConcatLayer([B, C, D])
 
-        assert get_all_layers(A) == [A, B, C, D, E]
+        assert get_all_layers(A) == [A, B, C, D, E][::-1]
 
     def test_get_all_layers_several_concats(self, get_all_layers):
         J = layers.InputLayer()
@@ -40,8 +40,8 @@ class TestGetLayers:
         C = layers.ConcatLayer([E, F])
         A = layers.ConcatLayer([B, C])
 
-        assert get_all_layers(D) == [D, G, H, I, J, K]
-        assert get_all_layers(A) == [A, B, C, D, E, F, G, H, I, J, K]
+        assert get_all_layers(D) == [D, G, H, I, J, K][::-1]
+        assert get_all_layers(A) == [A, B, C, D, E, F, G, H, I, J, K][::-1]
 
     def test_get_all_layers_with_list(self, get_all_layers):
         B = layers.InputLayer()
@@ -80,7 +80,7 @@ class TestGetLayers:
         C = layers.DenseLayer(E)
         A = layers.ConcatLayer([B, C, D])
 
-        assert get_input_layers(A) == [B, D, E]
+        assert get_input_layers(A) == [E, D, B]
 
     def test_get_input_layers_several_concats(self, get_input_layers):
         J = layers.InputLayer()
@@ -95,5 +95,5 @@ class TestGetLayers:
         C = layers.ConcatLayer([E, F])
         A = layers.ConcatLayer([B, C])
 
-        assert get_input_layers(D) == [G, J, K]
-        assert get_input_layers(A) == [F, G, J, K]
+        assert get_input_layers(D) == [G, J, K][::-1]
+        assert get_input_layers(A) == [F, G, J, K][::-1]
