@@ -238,11 +238,11 @@ class NeuralNetClassifier(NeuralNetBase):
     def _get_Xs_ys(self, X, y):
         input_layer = get_input_layers(self.layer)[0]
 
-        Xs = input_layer.Xs or tf.placeholder(
+        Xs = input_layer.Xs if input_layer.Xs is not None else tf.placeholder(
             dtype=floatX,
             shape=[None] + list(X.shape[1:]),
         )
-        ys = input_layer.ys or tf.placeholder(
+        ys = input_layer.ys if input_layer.ys is not None else tf.placeholder(
             dtype=floatX,
             shape=[None] + [len(np.unique(y))]
         )
@@ -304,11 +304,11 @@ class NeuralNetRegressor(NeuralNetBase):
     def _get_Xs_ys(self, X, y):
         input_layer = get_input_layers(self.layer)[0]
 
-        Xs = input_layer.Xs or tf.placeholder(
+        Xs = input_layer.Xs if input_layer.Xs is not None else tf.placeholder(
             dtype=floatX,
             shape=[None] + list(X.shape[1:]),
         )
-        ys = input_layer.ys or tf.placeholder(
+        ys = input_layer.ys if input_layer.ys is not None else tf.placeholder(
             dtype=floatX,
             shape=[None, 1]  # TODO: Multioutput not supported yet
         )
