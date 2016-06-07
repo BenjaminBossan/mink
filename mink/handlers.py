@@ -6,15 +6,7 @@ import sys
 from tabulate import tabulate
 
 from mink.utils import get_all_layers
-
-
-def _layer_name(layer):
-    if layer.name:
-        return layer.name
-    name = layer.__class__.__name__.split('.')[-1]
-    if name.endswith('Layer'):
-        name = name[:-5]
-    return name.lower()
+from mink.utils import get_layer_name
 
 
 class PrintLayerInfo(object):
@@ -55,7 +47,7 @@ class PrintLayerInfo(object):
         all_layers = get_all_layers(net.layer)
 
         nums = list(range(len(all_layers)))
-        names = [_layer_name(layer) for layer in all_layers]
+        names = [get_layer_name(layer) for layer in all_layers]
         output_shapes = ['x'.join(map(str, layer.output_shape[1:]))
                          for layer in all_layers]
 

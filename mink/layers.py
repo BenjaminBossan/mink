@@ -10,14 +10,23 @@ from mink import nonlinearities
 from mink.utils import as_4d
 from mink.utils import as_tuple
 from mink.utils import flatten
+from mink.utils import get_layer_name
 from mink.utils import get_shape
 from mink.utils import set_named_layer_param
+
+
+flags = tf.app.flags
 
 
 __all__ = [
     'InputLayer',
     'DenseLayer',
     'Conv2DLayer',
+    'FunctionLayer',
+    'MaxPool2DLayer',
+    'DropoutLayer',
+    'ImageResizeLayer',
+    'ConcatLayer',
 ]
 
 
@@ -25,17 +34,37 @@ def transform_decorator(f):
     @wraps(f)
     def wrapper(*args, **kwargs):
         out = f(*args, **kwargs)
-        self = args[0]
-        self.output_shape = get_shape(out)
+        layer = args[0]
+
+        # set output shape
+        layer.output_shape = get_shape(out)
+
+        # log output activity
+        if hasattr(flags.FLAGS, 'summaries_dir') and layer.make_logs:
+            layer_name = get_layer_name(layer)
+            tf.histogram_summary(layer_name + ' activity', out)
+
         return out
     return wrapper
 
 
-class Layer(BaseEstimator, TransformerMixin):
+class _Layer(type):
+    def __new__(cls, name, base, attrs):
+        to_decorate = ['transform']
+        to_decorate += attrs.get('fit_transform', [])
+        for method in to_decorate:
+            attrs[method] = transform_decorator(attrs[method])
+
+        return super().__new__(cls, name, base, attrs)
+
+
+class Layer(BaseEstimator, TransformerMixin, metaclass=_Layer):
+    def __init__(self, incoming, name=None, make_logs=False):
+        raise NotImplementedError
+
     def fit(self, Xs, ys, **kwargs):
         raise NotImplementedError
 
-    @transform_decorator
     def transform(self, Xs, ys=None, **kwargs):
         raise NotImplementedError
 
@@ -109,10 +138,11 @@ def _identity(X):
 
 
 class FunctionLayer(Layer):
-    def __init__(self, incoming, func=None, name=None):
+    def __init__(self, incoming, func=None, name=None, make_logs=False):
         self.incoming = incoming
         self.func = func
         self.name = name
+        self.make_logs = make_logs
 
     def fit(self, Xs, ys=None, **kwargs):
         self.incoming.fit(Xs, ys, **kwargs)
@@ -130,10 +160,12 @@ class InputLayer(Layer):
             Xs=None,
             ys=None,
             name=None,
+            make_logs=False,
     ):
         self.Xs = Xs
         self.ys = ys
         self.name = name
+        self.make_logs = make_logs
 
     def fit(self, Xs, ys=None, **kwargs):
         if self.Xs is None:
@@ -146,20 +178,20 @@ class InputLayer(Layer):
             self.ys_ = self.ys
         return self
 
-    @transform_decorator
     def transform(self, Xs, ys=None, **kwargs):
         return self.Xs_
 
 
 class DenseLayer(Layer):
     def __init__(
-        self,
-        incoming=None,
-        num_units=None,
-        nonlinearity=None,
-        W=inits.GlorotUniform(),
-        b=inits.Constant(0.),
-        name=None,
+            self,
+            incoming=None,
+            num_units=None,
+            nonlinearity=None,
+            W=inits.GlorotUniform(),
+            b=inits.Constant(0.),
+            name=None,
+            make_logs=False,
     ):
         self.incoming = incoming
         self.num_units = num_units
@@ -167,6 +199,7 @@ class DenseLayer(Layer):
         self.W = W
         self.b = b
         self.name = name
+        self.make_logs = make_logs
 
     def fit(self, Xs, ys=None, **kwargs):
         self.num_units_ = self.num_units or 100
@@ -203,6 +236,7 @@ class Conv2DLayer(Layer):
             b=inits.Constant(0.),
             nonlinearity=nonlinearities.Rectify(),
             name=None,
+            make_logs=False,
     ):
         self.incoming = incoming
         self.num_filters = num_filters
@@ -213,6 +247,7 @@ class Conv2DLayer(Layer):
         self.b = b
         self.nonlinearity = nonlinearity
         self.name = name
+        self.make_logs = make_logs
 
         allowed = ('SAME', 'VALID')
         if padding not in allowed:
@@ -241,7 +276,6 @@ class Conv2DLayer(Layer):
 
         return self
 
-    @transform_decorator
     def transform(self, Xs, ys=None, **kwargs):
         Xs_inc = self.incoming.transform(Xs, ys, **kwargs)
 
@@ -264,12 +298,14 @@ class MaxPool2DLayer(Layer):
             stride=2,
             padding='SAME',
             name=None,
+            make_logs=False,
     ):
         self.incoming = incoming
         self.pool_size = pool_size
         self.stride = stride
         self.padding = padding
         self.name = name
+        self.make_logs = make_logs
 
         allowed = ('SAME', 'VALID')
         if padding not in allowed:
@@ -284,7 +320,6 @@ class MaxPool2DLayer(Layer):
 
         return self
 
-    @transform_decorator
     def transform(self, Xs, ys=None, **kwargs):
         Xs_inc = self.incoming.transform(Xs, ys, **kwargs)
         return tf.nn.max_pool(
@@ -301,16 +336,17 @@ class DropoutLayer(Layer):
             incoming,
             p=0.5,
             name=None,
+            make_logs=False,
     ):
         self.incoming = incoming
         self.p = p
         self.name = name
+        self.make_logs = make_logs
 
     def fit(self, Xs, ys, **kwargs):
         self.incoming.fit(Xs, ys, **kwargs)
         return self
 
-    @transform_decorator
     def transform(self, Xs, ys=None, **kwargs):
         Xs_inc = self.incoming.transform(Xs, ys, **kwargs)
 
@@ -331,18 +367,19 @@ class ConcatLayer(Layer):
             self,
             incomings,
             axis=1,
-            name=None
+            name=None,
+            make_logs=False,
     ):
         self.incomings = incomings
         self.axis = axis
         self.name = name
+        self.make_logs = make_logs
 
     def fit(self, Xs, ys, **kwargs):
         for incoming in self.incomings:
             incoming.fit(Xs, ys, **kwargs)
         return self
 
-    @transform_decorator
     def transform(self, Xs, ys=None, **kwargs):
         Xs_incs = [incoming.transform(Xs, ys, **kwargs) for
                    incoming in self.incomings]
@@ -359,11 +396,13 @@ class ImageResizeLayer(Layer):
             scale=2,
             resize_method=tf.image.ResizeMethod.BILINEAR,
             name=None,
+            make_logs=False,
     ):
         self.incoming = incoming
         self.scale = scale
         self.resize_method = resize_method
         self.name = name
+        self.make_logs = make_logs
 
     def fit(self, Xs, ys, **kwargs):
         Xs_inc = self.incoming.fit_transform(Xs, ys, **kwargs)
@@ -374,7 +413,6 @@ class ImageResizeLayer(Layer):
         self.new_width_ = int(scale_width * width)
         return self
 
-    @transform_decorator
     def transform(self, Xs, ys=None, **kwargs):
         Xs_inc = self.incoming.transform(Xs, ys, **kwargs)
         return tf.image.resize_images(

@@ -120,3 +120,12 @@ def get_input_layers(layer):
         ):
             input_layers.append(layer)
     return input_layers
+
+
+def get_layer_name(layer):
+    if layer.name:
+        return layer.name
+    name = layer.__class__.__name__.split('.')[-1]
+    if name.endswith('Layer'):
+        name = name[:-5]
+    return name.lower()

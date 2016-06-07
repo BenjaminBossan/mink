@@ -16,6 +16,8 @@ from mink.utils import get_all_layers
 from mink.utils import get_shape
 from mink.utils import set_named_layer_param
 
+flags = tf.app.flags
+
 
 __all__ = ['NeuralNetClassifier', 'NeuralNetRegressor']
 
@@ -39,15 +41,29 @@ class NeuralNetBase(BaseEstimator, TransformerMixin):
         train_step = self.update(loss)
 
         if self.session_kwargs:
-            self.session_ = tf.Session(**self.session_kwargs)
+            session = tf.Session(**self.session_kwargs)
         else:
-            self.session_ = tf.Session()
+            session = tf.Session()
         # TODO: Only initialize required variables?
-        self.session_.run(tf.initialize_all_variables())
+        session.run(tf.initialize_all_variables())
+
+        if hasattr(flags.FLAGS, 'summaries_dir'):
+            tensorboard_logs = tf.train.SummaryWriter(
+                flags.FLAGS.summaries_dir,
+                session.graph,
+            )
+        else:
+            tensorboard_logs = None
+
+        if tensorboard_logs:
+            tf.histogram_summary('train activity', ys_ff)
+            tf.scalar_summary('train loss', loss)
 
         if self.encoder:
             self.encoder.fit(y)
 
+        self.session_ = session
+        self.tensorboard_logs_ = tensorboard_logs
         self.loss_ = loss
         self.train_step_ = train_step
         self.Xs_ = Xs
@@ -86,24 +102,35 @@ class NeuralNetBase(BaseEstimator, TransformerMixin):
 
     def train_loop(self, X, y, num_epochs):
         template = "epochs: {:>4} | loss: {:.5f}"
+        summary = tf.merge_all_summaries()
 
         for i, epoch in enumerate(range(num_epochs)):
             losses = []
             for Xb, yb in self.batch_iterator(X, y):
                 inputs = [self.train_step_, self.loss_]
+                if summary is not None:
+                    inputs += [summary]
                 feed_dict = {
                     self.Xs_: Xb,
                     self.ys_: yb,
                     self.deterministic_: False,
                 }
 
-                __, loss = self.session_.run(
+                output = self.session_.run(
                     inputs,
                     feed_dict=feed_dict,
                 )
+                if summary is not None:
+                    __, loss, logs = output
+                else:
+                    __, loss = output
+                    logs = None
 
                 if self.verbose:
                     losses.append(loss)
+
+            if logs:
+                self.tensorboard_logs_.add_summary(logs, i)
             if self.verbose:
                 # TODO: should use np.average at some point
                 print(template.format(i + 1, np.mean(loss)))
