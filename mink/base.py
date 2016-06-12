@@ -13,7 +13,6 @@ from mink.layers import DenseLayer
 from mink.updates import SGD
 from mink.utils import get_input_layers
 from mink.utils import get_all_layers
-from mink.utils import get_shape
 from mink.utils import set_named_layer_param
 
 flags = tf.app.flags
@@ -23,11 +22,28 @@ __all__ = ['NeuralNetClassifier', 'NeuralNetRegressor']
 
 
 class NeuralNetBase(BaseEstimator, TransformerMixin):
-    def initialize(self, X, y):
+    def initialize(self, X=None, y=None):
+        # Note: if X and y are None, we assume that the net has been
+        # loaded from a fitted net. In that case, the shapes of inputs
+        # and outputs are saved as attributes on the input and output
+        # layers and we don't need to infer them from data.
+
         if getattr(self, '_initalized', None):
             return
 
-        Xs, ys = self._get_Xs_ys(X, y)
+        input_shapes = self._get_input_shapes(X)
+        if y is None:
+            # Assumes that net is initialiazed already
+            try:
+                output_shape = self.layer.output_shape
+            except AttributeError:
+                raise AttributeError(
+                    "Please initialize the net with data, "
+                    "e.g. net.initialiize(X, y).")
+        else:
+            output_shape = self._get_output_shape(y)
+
+        Xs, ys = self._get_Xs_ys(input_shapes, output_shape)
         deterministic = tf.placeholder(bool)
 
         if isinstance(self.layer, list):
@@ -35,7 +51,7 @@ class NeuralNetBase(BaseEstimator, TransformerMixin):
         else:
             layer = self.layer
 
-        self._initialize_output_layer(layer, Xs, ys)
+        self._initialize_output_layer(layer, output_shape)
         ys_ff = layer.fit_transform(Xs, ys, deterministic=deterministic)
         loss = self.objective(ys, ys_ff)
         train_step = self.update(loss)
@@ -61,7 +77,7 @@ class NeuralNetBase(BaseEstimator, TransformerMixin):
             tf.histogram_summary('train activity', ys_ff)
             tf.scalar_summary('train loss', loss)
 
-        if self.encoder:
+        if y is not None and self.encoder:
             self.encoder.fit(y)
 
         self.session_ = session
@@ -74,8 +90,43 @@ class NeuralNetBase(BaseEstimator, TransformerMixin):
         self.feed_forward_ = ys_ff
         self._initialized = True
 
-    def _get_Xs_ys(self, X, y):
+    def _get_input_shapes(self, X):
+        if X is None:
+            # Assumes that net is initialiazed already
+            try:
+                input_layers = get_input_layers(self.layer)
+                input_shapes = [l.output_shape for l in input_layers]
+            except AttributeError:
+                raise AttributeError(
+                    "Please initialize the net with data, "
+                    "e.g. net.initialiize(X, y).")
+        else:
+            if isinstance(X, np.ndarray):
+                X = [X]
+            input_shapes = [[None] + list(x.shape[1:]) for x in X]
+
+        return input_shapes
+
+    def _get_output_shape(self, y):
+        # Depends on whether we have classification or regression (or
+        # something else entirely).
         raise NotImplementedError
+
+    def _get_Xs_ys(self, input_shapes, output_shape):
+        input_layers = get_input_layers(self.layer)
+        if (len(input_shapes) > 1) or (len(input_layers) > 1):
+            raise ValueError("Multiple input layers not supported yet.")
+        input_layer = input_layers[0]
+
+        Xs = input_layer.Xs if input_layer.Xs is not None else tf.placeholder(
+            dtype=floatX,
+            shape=input_shapes[0],
+        )
+        ys = input_layer.ys if input_layer.ys is not None else tf.placeholder(
+            dtype=floatX,
+            shape=output_shape,
+        )
+        return Xs, ys
 
     def _initialize_iterators(self):
         if isinstance(self.batch_iterator_train, int):
@@ -255,6 +306,7 @@ class NeuralNetBase(BaseEstimator, TransformerMixin):
         all_params = state.pop('_all_params')
         self.__dict__ = state
         self.set_all_params(all_params)
+        self.initialize()
 
 
 class NeuralNetClassifier(NeuralNetBase):
@@ -282,26 +334,16 @@ class NeuralNetClassifier(NeuralNetBase):
         self.session_kwargs = session_kwargs
         self.on_training_started = on_training_started
 
-    def _initialize_output_layer(self, layer, Xs, ys):
+    def _initialize_output_layer(self, layer, output_shape):
         if isinstance(layer, DenseLayer):
-            ys_shape = get_shape(ys)
-            if (layer.num_units is None) and (len(ys_shape) == 2):
-                layer.set_params(num_units=ys_shape[1])
+            if (layer.num_units is None) and (len(output_shape) == 2):
+                layer.set_params(num_units=output_shape[1])
             if layer.nonlinearity is None:
                 layer.set_params(nonlinearity=nonlinearities.Softmax())
 
-    def _get_Xs_ys(self, X, y):
-        input_layer = get_input_layers(self.layer)[0]
-
-        Xs = input_layer.Xs if input_layer.Xs is not None else tf.placeholder(
-            dtype=floatX,
-            shape=[None] + list(X.shape[1:]),
-        )
-        ys = input_layer.ys if input_layer.ys is not None else tf.placeholder(
-            dtype=floatX,
-            shape=[None] + [len(np.unique(y))]
-        )
-        return Xs, ys
+    def _get_output_shape(self, y):
+        num_classes = len(np.unique(y))
+        return [None, num_classes]
 
     @property
     def classes_(self):
@@ -347,29 +389,19 @@ class NeuralNetRegressor(NeuralNetBase):
         self.session_kwargs = session_kwargs
         self.on_training_started = on_training_started
 
-    def _initialize_output_layer(self, layer, Xs, ys):
+    def _initialize_output_layer(self, layer, output_shape):
         if isinstance(layer, DenseLayer):
-            ys_shape = get_shape(ys)
-            if (layer.num_units is None) and (len(ys_shape) == 2):
-                if ys_shape[1] > 1:
+            if (layer.num_units is None) and (len(output_shape) == 2):
+                if output_shape[1] > 1:
                     raise ValueError("Multioutput regression currently not "
                                      "supported.")
-                layer.set_params(num_units=ys_shape[1])
+                layer.set_params(num_units=output_shape[1])
             if layer.nonlinearity is None:
                 layer.set_params(nonlinearity=nonlinearities.Linear())
 
-    def _get_Xs_ys(self, X, y):
-        input_layer = get_input_layers(self.layer)[0]
-
-        Xs = input_layer.Xs if input_layer.Xs is not None else tf.placeholder(
-            dtype=floatX,
-            shape=[None] + list(X.shape[1:]),
-        )
-        ys = input_layer.ys if input_layer.ys is not None else tf.placeholder(
-            dtype=floatX,
-            shape=[None, 1]  # TODO: Multioutput not supported yet
-        )
-        return Xs, ys
+    def _get_output_shape(self, y):
+        output_dim = list(y.shape[1:])
+        return [None] + output_dim
 
     def predict(self, X):
         session = self.session_

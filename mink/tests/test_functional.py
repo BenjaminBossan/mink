@@ -27,7 +27,6 @@ class TestSaveLoadModel:
         with open(str(p), 'rb') as f:
             new_net = pickle.load(f)
 
-        new_net.initialize(X, y)
         score_after = accuracy_score(y, new_net.predict(X))
         assert np.isclose(score_after, score_before)
 
