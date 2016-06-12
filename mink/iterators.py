@@ -7,7 +7,7 @@ from sklearn.utils import tosequence
 class IteratorPipeline(BaseEstimator, TransformerMixin):
     def __init__(
             self,
-            batch_size,
+            batch_size=128,
             steps=[],
             deterministic=False,
     ):
@@ -33,6 +33,22 @@ class IteratorPipeline(BaseEstimator, TransformerMixin):
                 raise TypeError("All steps of the chain should "
                                 "be transforms and implement fit and transform"
                                 " '%s' (type %s) doesn't)" % (t, type(t)))
+
+    def get_params(self, deep=True):
+        if not deep:
+            return super().get_params(deep=False)
+        else:
+            out = self.named_steps
+            for name, step in self.named_steps.items():
+                for key, value in step.get_params(deep=True).items():
+                    out['%s__%s' % (name, key)] = value
+
+            out.update(super().get_params(deep=False))
+            return out
+
+    @property
+    def named_steps(self):
+        return dict(self.steps)
 
     def fit(self, X, y, **kwargs):
         transform_steps = dict((step, {}) for step, __ in self.steps)

@@ -14,6 +14,9 @@ class TestIteartorPipeline:
         from mink.iterators import Iterator
 
         class Add1Iterator(Iterator):
+            def __init__(self, to_add=1):
+                self.to_add = to_add
+
             def transform(self, X, y, deterministic, **kwargs):
                 if not hasattr(self, '_count'):
                     self._count = 0
@@ -22,7 +25,7 @@ class TestIteartorPipeline:
                 if deterministic:
                     return X, y
                 else:
-                    return X + 1, y
+                    return X + self.to_add, y
 
         return Add1Iterator()
 
@@ -38,7 +41,7 @@ class TestIteartorPipeline:
 
         return iterator_pipeline_cls(
             batch_size=batch_size,
-            steps=[(str(i), clone(add1_iterator)) for i in range(n_steps)],
+            steps=[('s%d' % i, clone(add1_iterator)) for i in range(n_steps)],
             deterministic=deterministic,
         )
 
@@ -175,3 +178,18 @@ class TestIteartorPipeline:
 
         for __, transform in pipe.steps:
             assert transform._count == expected_count
+
+    @pytest.mark.parametrize('n_steps', [1, 2, 5])
+    def test_iterator_pipeline_set_params(
+            self, data, n_steps):
+        X, y = data
+        pipe = self.get_iterator_pipeline(
+            n_steps=n_steps,
+            deterministic=False,
+        )
+
+        pipe.set_params(s0__to_add=10)
+        Xt, yt = pipe.fit_transform(X, y)
+
+        expected = n_steps - 1 + 10
+        assert np.allclose(Xt, np.zeros_like(X) + expected)
