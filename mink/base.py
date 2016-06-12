@@ -4,12 +4,12 @@ from sklearn.base import TransformerMixin
 from sklearn.preprocessing import LabelBinarizer
 import tensorflow as tf
 
-from mink.config import floatX
-from mink.layers import DenseLayer
-from mink.nolearn import BatchIterator
 from mink import handlers
 from mink import nonlinearities
 from mink import objectives
+from mink.config import floatX
+from mink.iterators import IteratorPipeline
+from mink.layers import DenseLayer
 from mink.updates import SGD
 from mink.utils import get_input_layers
 from mink.utils import get_all_layers
@@ -55,6 +55,8 @@ class NeuralNetBase(BaseEstimator, TransformerMixin):
         else:
             tensorboard_logs = None
 
+        self._initialize_iterators()
+
         if tensorboard_logs:
             tf.histogram_summary('train activity', ys_ff)
             tf.scalar_summary('train loss', loss)
@@ -75,6 +77,23 @@ class NeuralNetBase(BaseEstimator, TransformerMixin):
     def _get_Xs_ys(self, X, y):
         raise NotImplementedError
 
+    def _initialize_iterators(self):
+        if isinstance(self.batch_iterator_train, int):
+            self.batch_iterator_train_ = IteratorPipeline(
+                batch_size=self.batch_iterator_train,
+                deterministic=False,
+            )
+        else:
+            self.batch_iterator_train_ = self.batch_iterator_train
+
+        if isinstance(self.batch_iterator_test, int):
+            self.batch_iterator_test_ = IteratorPipeline(
+                batch_size=self.batch_iterator_test,
+                deterministic=True,
+            )
+        else:
+            self.batch_iterator_test_ = self.batch_iterator_test
+
     def fit(self, X, yt, num_epochs=None):
         if yt.ndim == 1:
             yt = yt.reshape(-1, 1)
@@ -87,6 +106,9 @@ class NeuralNetBase(BaseEstimator, TransformerMixin):
                 y = np.hstack((1.0 - y, y))
         else:
             y = yt
+
+        self.batch_iterator_train_.fit(X, y)
+        self.batch_iterator_test_.fit(X, y)
 
         if num_epochs is None:
             num_epochs = self.max_epochs
@@ -106,7 +128,7 @@ class NeuralNetBase(BaseEstimator, TransformerMixin):
 
         for i, epoch in enumerate(range(num_epochs)):
             losses = []
-            for Xb, yb in self.batch_iterator(X, y):
+            for Xb, yb in self.batch_iterator_train_(X, y):
                 inputs = [self.train_step_, self.loss_]
                 if summary is not None:
                     inputs += [summary]
@@ -241,7 +263,8 @@ class NeuralNetClassifier(NeuralNetBase):
             layer,
             objective=objectives.CrossEntropy(),
             update=SGD(),
-            batch_iterator=BatchIterator(256),
+            batch_iterator_train=128,
+            batch_iterator_test=128,
             max_epochs=10,
             verbose=0,
             encoder=LabelBinarizer(),
@@ -251,7 +274,8 @@ class NeuralNetClassifier(NeuralNetBase):
         self.layer = layer
         self.objective = objective
         self.update = update
-        self.batch_iterator = batch_iterator
+        self.batch_iterator_train = batch_iterator_train
+        self.batch_iterator_test = batch_iterator_test
         self.max_epochs = max_epochs
         self.verbose = verbose
         self.encoder = encoder
@@ -287,7 +311,7 @@ class NeuralNetClassifier(NeuralNetBase):
         session = self.session_
         y_proba = []
 
-        for Xb, __ in self.batch_iterator(X):
+        for Xb, __ in self.batch_iterator_test_(X):
             feed_dict = {self.Xs_: Xb, self.deterministic_: True}
             y_proba.append(
                 session.run(self.feed_forward_, feed_dict=feed_dict))
@@ -304,7 +328,8 @@ class NeuralNetRegressor(NeuralNetBase):
             layer,
             objective=objectives.MeanSquaredError(),
             update=SGD(),
-            batch_iterator=BatchIterator(256),
+            batch_iterator_train=128,
+            batch_iterator_test=128,
             max_epochs=10,
             verbose=0,
             encoder=None,
@@ -314,7 +339,8 @@ class NeuralNetRegressor(NeuralNetBase):
         self.layer = layer
         self.objective = objective
         self.update = update
-        self.batch_iterator = batch_iterator
+        self.batch_iterator_train = batch_iterator_train
+        self.batch_iterator_test = batch_iterator_test
         self.max_epochs = max_epochs
         self.verbose = verbose
         self.encoder = encoder
@@ -349,7 +375,7 @@ class NeuralNetRegressor(NeuralNetBase):
         session = self.session_
         y_pred = []
 
-        for Xb, __ in self.batch_iterator(X):
+        for Xb, __ in self.batch_iterator_test_(X):
             feed_dict = {self.Xs_: Xb, self.deterministic_: True}
             y_pred.append(
                 session.run(self.feed_forward_, feed_dict=feed_dict))
