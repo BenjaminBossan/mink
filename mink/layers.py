@@ -2,8 +2,6 @@
 
 # pylint: disable=super-init-not-called
 
-from functools import wraps
-
 import numpy as np
 from sklearn.base import BaseEstimator
 from sklearn.base import TransformerMixin
@@ -34,43 +32,29 @@ __all__ = [
 ]
 
 
-def transform_decorator(func):
-    @wraps(func)
-    def wrapper(*args, **kwargs):
-        out = func(*args, **kwargs)
-        layer = args[0]
-
-        # set output shape
-        layer.output_shape = get_shape(out)
-
-        # log output activity
-        if hasattr(flags.FLAGS, 'summaries_dir') and layer.make_logs:
-            layer_name = get_layer_name(layer)
-            tf.histogram_summary(layer_name + ' activity', out)
-
-        return out
-    return wrapper
-
-
-class _Layer(type):
-    def __new__(mcs, name, base, attrs):
-        to_decorate = ['transform']
-        to_decorate += attrs.get('fit_transform', [])
-        for method in to_decorate:
-            attrs[method] = transform_decorator(attrs[method])
-
-        return super().__new__(mcs, name, base, attrs)
-
-
-class Layer(BaseEstimator, TransformerMixin, metaclass=_Layer):
+class Layer(BaseEstimator, TransformerMixin):
     """TODO"""
     def __init__(self, incoming, name=None, make_logs=False):
         raise NotImplementedError
 
-    def fit(self, Xs, ys, **kwargs):
-        raise NotImplementedError
+    def fit(self, Xs, ys=None, **kwargs):
+        self.incoming.fit(Xs, ys, **kwargs)
+        return self
 
     def transform(self, Xs, **kwargs):
+        # handle transformation of Xs
+        incoming = getattr(self, 'incoming') or getattr(self, 'incomings')
+        Xs_inc = incoming.transform(Xs, **kwargs)
+        X_out = self.__call__(Xs_inc, **kwargs)
+        self.output_shape = get_shape(X_out)
+
+        # handle tensorflow logging
+        if hasattr(flags.FLAGS, 'summaries_dir') and self.make_logs:
+            layer_name = get_layer_name(self)
+            tf.histogram_summary(layer_name + ' activity', X_out)
+        return X_out
+
+    def __call__(self, Xs_inc, **kwargs):
         raise NotImplementedError
 
     def add_param(self, name, value, force=False):
@@ -150,12 +134,7 @@ class FunctionLayer(Layer):
         self.name = name
         self.make_logs = make_logs
 
-    def fit(self, Xs, ys=None, **kwargs):
-        self.incoming.fit(Xs, ys, **kwargs)
-        return self
-
-    def transform(self, Xs, **kwargs):
-        Xs_inc = self.incoming.transform(Xs, **kwargs)
+    def __call__(self, Xs_inc, **kwargs):
         func = self.func if self.func is not None else _identity
         return func(Xs_inc)
 
@@ -183,10 +162,14 @@ class InputLayer(Layer):
             self.ys_ = ys
         else:
             self.ys_ = self.ys
+        self.output_shape = get_shape(self.Xs_)
         return self
 
     def transform(self, Xs, **kwargs):
         return self.Xs_
+
+    def __call__(self, Xs_inc, **kwargs):
+        return Xs_inc
 
 
 # pylint: disable=too-many-instance-attributes
@@ -211,10 +194,10 @@ class DenseLayer(Layer):
         self.make_logs = make_logs
 
     def fit(self, Xs, ys=None, **kwargs):
+        Xs_inc = self.incoming.fit_transform(Xs, ys, **kwargs)
+
         self.num_units_ = self.num_units or 100
         self.nonlinearity_ = self.nonlinearity or nonlinearities.Rectify()
-
-        Xs_inc = self.incoming.fit_transform(Xs, ys, **kwargs)
 
         shape = get_shape(Xs_inc)
         self.add_param('W_', self.W((np.prod(shape[1:]), self.num_units_)))
@@ -222,8 +205,7 @@ class DenseLayer(Layer):
 
         return self
 
-    def transform(self, Xs, **kwargs):
-        Xs_inc = self.incoming.transform(Xs, **kwargs)
+    def __call__(self, Xs_inc, **kwargs):
         if len(Xs_inc.get_shape()) > 2:
             Xs_inc = flatten(Xs_inc, 2)
 
@@ -286,9 +268,7 @@ class Conv2DLayer(Layer):
 
         return self
 
-    def transform(self, Xs, **kwargs):
-        Xs_inc = self.incoming.transform(Xs, **kwargs)
-
+    def __call__(self, Xs_inc, **kwargs):
         conved = tf.nn.conv2d(
             Xs_inc,
             filter=self.W_,
@@ -331,8 +311,7 @@ class MaxPool2DLayer(Layer):
 
         return self
 
-    def transform(self, Xs, **kwargs):
-        Xs_inc = self.incoming.transform(Xs, **kwargs)
+    def __call__(self, Xs_inc, **kwargs):
         return tf.nn.max_pool(
             Xs_inc,
             ksize=self.pool_size_,
@@ -355,13 +334,7 @@ class DropoutLayer(Layer):
         self.name = name
         self.make_logs = make_logs
 
-    def fit(self, Xs, ys, **kwargs):
-        self.incoming.fit(Xs, ys, **kwargs)
-        return self
-
-    def transform(self, Xs, **kwargs):
-        Xs_inc = self.incoming.transform(Xs, **kwargs)
-
+    def __call__(self, Xs_inc, **kwargs):
         deterministic = kwargs.get(
             'deterministic',
             tf.Variable(False))
@@ -393,9 +366,7 @@ class ConcatLayer(Layer):
             incoming.fit(Xs, ys, **kwargs)
         return self
 
-    def transform(self, Xs, **kwargs):
-        Xs_incs = [incoming.transform(Xs, **kwargs) for
-                   incoming in self.incomings]
+    def __call__(self, Xs_incs, **kwargs):
         return tf.concat(
             values=Xs_incs,
             concat_dim=self.axis,
@@ -427,8 +398,7 @@ class ImageResizeLayer(Layer):
         self.new_width_ = int(scale_width * width)
         return self
 
-    def transform(self, Xs, **kwargs):
-        Xs_inc = self.incoming.transform(Xs, **kwargs)
+    def __call__(self, Xs_inc, **kwargs):
         return tf.image.resize_images(
             images=Xs_inc,
             new_height=self.new_height_,
