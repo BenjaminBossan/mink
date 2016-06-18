@@ -1,54 +1,63 @@
+"""Contains base utilities that don't depend on other modules."""
+
 import numpy as np
 import tensorflow as tf
 
 
-def as_tuple(x, N, t=None):
+def as_tuple(value, num, dtype=None):
     """Coerce a value to a tuple of given length (and possibly given
     type).
 
     Parameters
     ----------
-    x : value or iterable
-    N : integer
+    value : value or iterable
+    num : integer
         length of the desired tuple
-    t : type, optional
+    dtype : type, optional
         required type for all elements
 
     Returns
     -------
     tuple
-        ``tuple(x)`` if `x` is iterable, ``(x,) * N`` otherwise.
+        ``tuple(value)`` if `value` is iterable, ``(value,) * num`` otherwise.
 
     Raises
     ------
     TypeError
-        if `type` is given and `x` or any of its elements do not match it
+        if `dtype` is given and `value` or any of its elements do not match it
 
     ValueError
-        if `x` is iterable, but does not have exactly `N` elements
+        if `value` is iterable, but does not have exactly `num` elements
 
     """
     try:
-        X = tuple(x)
+        X = tuple(value)
     except TypeError:
-        X = (x,) * N
+        X = (value,) * num
 
-    if (t is not None) and not all(isinstance(v, t) for v in X):
-        raise TypeError("expected a single value or an iterable "
-                        "of {0}, got {1} instead".format(t.__name__, x))
+    if (dtype is not None) and not all(isinstance(v, dtype) for v in X):
+        raise TypeError(
+            "expected a single value or an iterable "
+            "of {0}, got {1} instead".format(dtype.__name__, value))
 
-    if len(X) != N:
+    if len(X) != num:
         raise ValueError("expected a single value or an iterable "
-                         "with length {0}, got {1} instead".format(N, x))
+                         "with length {0}, got {1} instead".format(num, value))
 
     return X
 
 
-def as_4d(x):
-    if not isinstance(x, (list, tuple)):
-        return (1, x, x, 1)
+def as_4d(value):
+    """Return a tuple of length 4 (1, value, value, 1) if not a tuple
+    already.
+
+    """
+    if not isinstance(value, (list, tuple)):
+        return (1, value, value, 1)
+    elif len(value) == 4:
+        return value
     else:
-        return x
+        raise ValueError("Cannot transform to length 4 tuple.")
 
 
 def get_shape(placeholder):
@@ -56,8 +65,9 @@ def get_shape(placeholder):
 
 
 def set_named_layer_param(layer, key, value):
+    """TODO"""
     name = layer.name
-    start, end = key.split('__', 1)
+    end = key.split('__', 1)[1]
 
     if (
             not name or
@@ -78,6 +88,7 @@ def set_named_layer_param(layer, key, value):
 
 
 def flatten(Xs, ndim=2):
+    """Flatten a symbolic variable to given number of dimensions."""
     shape = list(get_shape(Xs))
     last_dim = np.prod(shape[ndim - 1:])
     if shape[0] is None:
@@ -88,6 +99,7 @@ def flatten(Xs, ndim=2):
 
 
 def get_incomings(layer):
+    """Get all incoming layers for given layer."""
     incoming = getattr(layer, 'incoming', None)
     if incoming:
         return [incoming]
@@ -96,6 +108,10 @@ def get_incomings(layer):
 
 
 def get_all_layers(layer):
+    """Perform a breadth-first-search for all layers incoming to this
+    layer.
+
+    """
     # Assumes that all layers are in list. Maybe check?
     if isinstance(layer, list):
         return layer
@@ -111,6 +127,10 @@ def get_all_layers(layer):
 
 
 def get_input_layers(layer):
+    """Find all layers in the graph descending to this layer that are
+    InputLayers.
+
+    """
     input_layers = []
     all_layers = get_all_layers(layer)
     for layer in all_layers:
@@ -123,6 +143,7 @@ def get_input_layers(layer):
 
 
 def get_layer_name(layer):
+    """Return the name of the layer or create one if there is none."""
     if layer.name:
         return layer.name
     name = layer.__class__.__name__.split('.')[-1]

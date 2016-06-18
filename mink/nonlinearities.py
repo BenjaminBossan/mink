@@ -1,3 +1,11 @@
+"""Contains all nonlinearities.
+
+Often, nonlinearities are simple tensorflow expressions. However, it
+could still be useful to wrap them as classes for use cases such as
+testing `isinstance(nonlin, Nonlinearity)`.
+
+"""
+
 from sklearn.base import BaseEstimator
 import tensorflow as tf
 

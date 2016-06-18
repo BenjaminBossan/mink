@@ -1,3 +1,5 @@
+"""Contains initializations for tensorflow variables."""
+
 import numpy as np
 from sklearn.base import BaseEstimator
 import tensorflow as tf
@@ -19,17 +21,19 @@ class Init(BaseEstimator):
 
 
 class Constant(Init):
+    """Constant value."""
     def __init__(
             self,
-            val=0.0,
+            value=0.0,
     ):
-        self.val = val
+        self.value = value
 
     def __call__(self, shape):
-        return tf.Variable(self.val * tf.ones(shape=shape))
+        return tf.Variable(self.value * tf.ones(shape=shape))
 
 
 class Uniform(Init):
+    """Uniform distribuation."""
     def __init__(
             self,
             range=0.01,
@@ -62,6 +66,7 @@ class Uniform(Init):
 
 
 class Normal(Init):
+    """Normal (gaussian) initialization."""
     def __init__(
             self,
             std=1.0,
@@ -82,6 +87,7 @@ class Normal(Init):
 
 
 class TruncatedNormal(Init):
+    """Truncated normal initialization."""
     def __init__(
             self,
             mean=0.0,
@@ -106,6 +112,7 @@ class Zeros(Init):
 
 
 class Glorot(Init):
+    """Glorot (Xavier) initialization."""
     def __init__(
             self,
             initializer,

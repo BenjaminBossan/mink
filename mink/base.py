@@ -1,3 +1,5 @@
+"""Module contains estimators and the estimator base class."""
+
 import numpy as np
 from sklearn.base import BaseEstimator
 from sklearn.base import TransformerMixin
@@ -21,8 +23,41 @@ flags = tf.app.flags
 __all__ = ['NeuralNetClassifier', 'NeuralNetRegressor']
 
 
+# pylint: disable=super-init-not-called,too-many-arguments
+# pylint: disable=too-many-instance-attributes
 class NeuralNetBase(BaseEstimator, TransformerMixin):
+    """Base class for neural network estimators.
+
+    Cannot be used by itself.
+    """
+
+    # pylint: disable=too-many-instance-attributes
+    def __init__(
+            self,
+            layer,
+            update,
+            batch_iterator_train,
+            batch_iterator_test,
+            max_epochs,
+            objective,
+            encoder,
+            session_kwargs,
+            on_training_started,
+            verbose,
+    ):
+        self.layer = layer
+        self.update = update
+        self.batch_iterator_train = batch_iterator_train
+        self.batch_iterator_test = batch_iterator_test
+        self.max_epochs = max_epochs
+        self.objective = objective
+        self.encoder = encoder
+        self.session_kwargs = session_kwargs
+        self.on_training_started = on_training_started
+        self.verbose = verbose
+
     def initialize(self, X=None, y=None):
+        """TODO"""
         # Note: if X and y are None, we assume that the net has been
         # loaded from a fitted net. In that case, the shapes of inputs
         # and outputs are saved as attributes on the input and output
@@ -43,7 +78,7 @@ class NeuralNetBase(BaseEstimator, TransformerMixin):
         else:
             output_shape = self._get_output_shape(y)
 
-        Xs, ys = self._get_Xs_ys(input_shapes, output_shape)
+        Xs, ys = self._get_symbolic_vars(input_shapes, output_shape)
         deterministic = tf.placeholder(bool)
 
         if isinstance(self.layer, list):
@@ -71,7 +106,8 @@ class NeuralNetBase(BaseEstimator, TransformerMixin):
         else:
             tensorboard_logs = None
 
-        self._initialize_iterators()
+        self.batch_iterator_train_, self.batch_iterator_test_ = (
+            self._get_iterators())
 
         if tensorboard_logs:
             tf.histogram_summary('train activity', ys_ff)
@@ -89,6 +125,9 @@ class NeuralNetBase(BaseEstimator, TransformerMixin):
         self.deterministic_ = deterministic
         self.feed_forward_ = ys_ff
         self._initialized = True
+
+    def _initalize_output_layer(self, layer, output_shape):
+        raise NotImplementedError
 
     def _get_input_shapes(self, X):
         if X is None:
@@ -112,7 +151,7 @@ class NeuralNetBase(BaseEstimator, TransformerMixin):
         # something else entirely).
         raise NotImplementedError
 
-    def _get_Xs_ys(self, input_shapes, output_shape):
+    def _get_symbolic_vars(self, input_shapes, output_shape):
         input_layers = get_input_layers(self.layer)
         if (len(input_shapes) > 1) or (len(input_layers) > 1):
             raise ValueError("Multiple input layers not supported yet.")
@@ -128,24 +167,26 @@ class NeuralNetBase(BaseEstimator, TransformerMixin):
         )
         return Xs, ys
 
-    def _initialize_iterators(self):
+    def _get_iterators(self):
         if isinstance(self.batch_iterator_train, int):
-            self.batch_iterator_train_ = IteratorPipeline(
+            batch_iterator_train = IteratorPipeline(
                 batch_size=self.batch_iterator_train,
                 deterministic=False,
             )
         else:
-            self.batch_iterator_train_ = self.batch_iterator_train
+            batch_iterator_train = self.batch_iterator_train
 
         if isinstance(self.batch_iterator_test, int):
-            self.batch_iterator_test_ = IteratorPipeline(
+            batch_iterator_test = IteratorPipeline(
                 batch_size=self.batch_iterator_test,
                 deterministic=True,
             )
         else:
-            self.batch_iterator_test_ = self.batch_iterator_test
+            batch_iterator_test = self.batch_iterator_test
+        return batch_iterator_train, batch_iterator_test
 
     def fit(self, X, yt, num_epochs=None):
+        """TODO"""
         if yt.ndim == 1:
             yt = yt.reshape(-1, 1)
 
@@ -174,10 +215,11 @@ class NeuralNetBase(BaseEstimator, TransformerMixin):
         return self
 
     def train_loop(self, X, y, num_epochs):
+        """TODO"""
         template = "epochs: {:>4} | loss: {:.5f}"
         summary = tf.merge_all_summaries()
 
-        for i, epoch in enumerate(range(num_epochs)):
+        for i in range(num_epochs):
             losses = []
             for Xb, yb in self.batch_iterator_train_(X, y):
                 inputs = [self.train_step_, self.loss_]
@@ -194,9 +236,9 @@ class NeuralNetBase(BaseEstimator, TransformerMixin):
                     feed_dict=feed_dict,
                 )
                 if summary is not None:
-                    __, loss, logs = output
+                    _, loss, logs = output
                 else:
-                    __, loss = output
+                    _, loss = output
                     logs = None
 
                 if self.verbose:
@@ -261,6 +303,7 @@ class NeuralNetBase(BaseEstimator, TransformerMixin):
         return self
 
     def get_all_params(self):
+        """TODO"""
         all_layers = get_all_layers(self.layer)
         all_params = []
         for layer in all_layers:
@@ -273,6 +316,7 @@ class NeuralNetBase(BaseEstimator, TransformerMixin):
         return all_params
 
     def set_all_params(self, all_params):
+        """TODO"""
         all_layers = get_all_layers(self.layer)
 
         if len(all_layers) != len(all_params):
@@ -309,7 +353,10 @@ class NeuralNetBase(BaseEstimator, TransformerMixin):
         self.initialize()
 
 
+# pylint: disable=super-init-not-called,too-many-arguments
+# pylint: disable=too-many-instance-attributes
 class NeuralNetClassifier(NeuralNetBase):
+    """TODO"""
     def __init__(
             self,
             layer,
@@ -321,7 +368,7 @@ class NeuralNetClassifier(NeuralNetBase):
             verbose=0,
             encoder=LabelBinarizer(),
             session_kwargs=None,
-            on_training_started=[handlers.PrintLayerInfo()],
+            on_training_started=(handlers.PrintLayerInfo(),),
     ):
         self.layer = layer
         self.objective = objective
@@ -350,10 +397,11 @@ class NeuralNetClassifier(NeuralNetBase):
         return self.encoder.classes_
 
     def predict_proba(self, X):
+        """TODO"""
         session = self.session_
         y_proba = []
 
-        for Xb, __ in self.batch_iterator_test_(X):
+        for Xb, _ in self.batch_iterator_test_(X):
             feed_dict = {self.Xs_: Xb, self.deterministic_: True}
             y_proba.append(
                 session.run(self.feed_forward_, feed_dict=feed_dict))
@@ -364,7 +412,10 @@ class NeuralNetClassifier(NeuralNetBase):
         return np.argmax(y_proba, axis=1)
 
 
+# pylint: disable=super-init-not-called,too-many-arguments
+# pylint: disable=too-many-instance-attributes
 class NeuralNetRegressor(NeuralNetBase):
+    """TODO"""
     def __init__(
             self,
             layer,
@@ -376,7 +427,7 @@ class NeuralNetRegressor(NeuralNetBase):
             verbose=0,
             encoder=None,
             session_kwargs=None,
-            on_training_started=[handlers.PrintLayerInfo()],
+            on_training_started=(handlers.PrintLayerInfo(),),
     ):
         self.layer = layer
         self.objective = objective
@@ -407,7 +458,7 @@ class NeuralNetRegressor(NeuralNetBase):
         session = self.session_
         y_pred = []
 
-        for Xb, __ in self.batch_iterator_test_(X):
+        for Xb, _ in self.batch_iterator_test_(X):
             feed_dict = {self.Xs_: Xb, self.deterministic_: True}
             y_pred.append(
                 session.run(self.feed_forward_, feed_dict=feed_dict))

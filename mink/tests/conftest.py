@@ -1,3 +1,9 @@
+"""conftest file for pytest.
+
+Contains fixtures and pytest options.
+
+"""
+
 import pytest
 from sklearn.datasets import make_classification
 from sklearn.datasets import make_regression

@@ -1,3 +1,5 @@
+"""Contains all variable update functions."""
+
 from sklearn.base import BaseEstimator
 import tensorflow as tf
 

@@ -1,20 +1,23 @@
+# pylint: disable=invalid-name,missing-docstring,no-self-use
+# pylint: disable=old-style-class,no-init
+
 import pickle
+from unittest.mock import patch
 
 import numpy as np
 import pytest
 from sklearn.grid_search import GridSearchCV
 from sklearn.metrics import accuracy_score
 from sklearn.metrics import mean_squared_error
-from unittest.mock import patch
-
-from mink import NeuralNetClassifier
-from mink.layers import DenseLayer
-from mink.layers import InputLayer
 
 
 class TestSaveLoadModel:
-    def test_pickle_save_load(
-            self, clf_net, clf_data, _layers, session_kwargs, tmpdir):
+    @pytest.fixture
+    def net_cls(self):
+        from mink import NeuralNetClassifier
+        return NeuralNetClassifier
+
+    def test_pickle_save_load(self, clf_net, clf_data, tmpdir):
         X, y = clf_data
         clf_net.fit(X, y, num_epochs=10)
         score_before = accuracy_score(y, clf_net.predict(X))
@@ -31,12 +34,12 @@ class TestSaveLoadModel:
         assert np.isclose(score_after, score_before)
 
     def test_load_params_from_other_model(
-            self, clf_net, clf_data, _layers, session_kwargs):
+            self, net_cls, clf_net, clf_data, _layers):
         X, y = clf_data
         clf_net.fit(X, y, num_epochs=10)
         score_before = accuracy_score(y, clf_net.predict(X))
 
-        new_net = NeuralNetClassifier(_layers)
+        new_net = net_cls(_layers)
         new_net.initialize(X, y)
         score_init = accuracy_score(y, new_net.predict(X))
         assert not np.isclose(score_init, score_before)
@@ -72,9 +75,20 @@ def test_call_fit_repeatedly(clf_net, clf_data):
 
 
 class TestSetParams:
-    def test_set_params_2_layers_no_names(self):
-        l0 = InputLayer()
-        l1 = DenseLayer(l0)
+    @pytest.fixture
+    def dense_layer_cls(self):
+        from mink.layers import DenseLayer
+        return DenseLayer
+
+    @pytest.fixture
+    def input_layer_cls(self):
+        from mink.layers import InputLayer
+        return InputLayer
+
+    def test_set_params_2_layers_no_names(
+            self, dense_layer_cls, input_layer_cls):
+        l0 = input_layer_cls()
+        l1 = dense_layer_cls(l0)
 
         l1.set_params(num_units=567)
         assert l1.num_units == 567
@@ -82,9 +96,9 @@ class TestSetParams:
         l1.set_params(incoming__Xs=123)
         assert l0.Xs == 123
 
-    def test_set_params_2_named_layers(self):
-        l0 = InputLayer(name='l0')
-        l1 = DenseLayer(l0, name='l1')
+    def test_set_params_2_named_layers(self, dense_layer_cls, input_layer_cls):
+        l0 = input_layer_cls(name='l0')
+        l1 = dense_layer_cls(l0, name='l1')
 
         l1.set_params(num_units=567)
         assert l1.num_units == 567
@@ -95,10 +109,11 @@ class TestSetParams:
         l1.set_params(l0__Xs=234)
         assert l0.Xs == 234
 
-    def test_set_params_3_layers_only_first_named(self):
-        l0 = InputLayer(name='l0')
-        l1 = DenseLayer(l0)
-        l2 = DenseLayer(l1, name='l1')
+    def test_set_params_3_layers_only_first_named(
+            self, dense_layer_cls, input_layer_cls):
+        l0 = input_layer_cls(name='l0')
+        l1 = dense_layer_cls(l0)
+        l2 = dense_layer_cls(l1, name='l1')
 
         l2.set_params(incoming__incoming__Xs=123)
         assert l0.Xs == 123
@@ -106,10 +121,13 @@ class TestSetParams:
         l2.set_params(l0__Xs=345)
         assert l0.Xs == 345
 
-    def test_set_params_neural_net_layers_not_named(self):
-        l0 = InputLayer()
-        l1 = DenseLayer(l0)
-        l2 = DenseLayer(l1)
+    def test_set_params_neural_net_layers_not_named(
+            self, dense_layer_cls, input_layer_cls):
+        from mink import NeuralNetClassifier
+
+        l0 = input_layer_cls()
+        l1 = dense_layer_cls(l0)
+        l2 = dense_layer_cls(l1)
         net = NeuralNetClassifier(layer=l2)
 
         net.set_params(layer__num_units=123)
@@ -129,19 +147,20 @@ class TestSetParams:
         assert clf_net.layer.incoming.incoming.Xs == 432
 
     @pytest.mark.xfail
-    def test_set_params_mixed_named_and_unnamed_layers(self):
+    def test_set_params_mixed_named_and_unnamed_layers(
+            self, dense_layer_cls, input_layer_cls):
         # The (perhaps irrelevant) use case of mixing named and
         # unnamed layer names in set params does not work at the
         # moment.
-        l0 = InputLayer(name='l0')
-        l1 = DenseLayer(l0, name='l1')
-        l2 = DenseLayer(l1, name='l2')
+        l0 = input_layer_cls(name='l0')
+        l1 = dense_layer_cls(l0, name='l1')
+        l2 = dense_layer_cls(l1, name='l2')
 
         l2.set_params(l2__incoming__Xs=777)
         assert l0.Xs == 777
 
 
-class TestNeuralNetClassifier:
+class TestNeuralNetEstimatorsLearn:
     def test_neural_net_classifier_learns(self, clf_net, clf_data):
         X, y = clf_data
 
@@ -154,8 +173,6 @@ class TestNeuralNetClassifier:
         min_improvement = score_before * (1 - score_before)
         assert score_after > score_before + min_improvement
 
-
-class TestNeuralNetRegressor:
     def test_neural_net_regressor_learns(self, regr_net, regr_data):
         X, y = regr_data
 

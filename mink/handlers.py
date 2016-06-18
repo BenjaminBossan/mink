@@ -1,3 +1,8 @@
+"""Contains handlers for the various callbacks of the NeuralNet
+classes.
+
+"""
+
 from collections import OrderedDict
 import functools
 import operator
@@ -10,6 +15,7 @@ from mink.utils import get_layer_name
 
 
 class PrintLayerInfo(object):
+    """Print basic information about the net's layers."""
     def __init__(self, tablefmt='pipe'):
         self.tablefmt = tablefmt
 
@@ -17,18 +23,19 @@ class PrintLayerInfo(object):
         if not net.verbose:
             return
 
-        message = self._get_greeting(net)
+        message = self.get_greeting(net)
         print(message)
         print("## Layer information")
         print("")
 
-        layer_info = self._get_layer_info_plain(net)
+        layer_info = self.get_layer_info_plain(net)
         print(layer_info)
         print("")
         sys.stdout.flush()
 
     @staticmethod
-    def _get_greeting(net):
+    def get_greeting(net):
+        """Information about the number of learnable parameters."""
         all_params = net.get_all_params()
         shapes = []
         for params in all_params:
@@ -43,7 +50,8 @@ class PrintLayerInfo(object):
                    "\n".format(num_params))
         return message
 
-    def _get_layer_info_plain(self, net):
+    def get_layer_info_plain(self, net):
+        """Information about the layer output shapes."""
         all_layers = get_all_layers(net.layer)
 
         nums = list(range(len(all_layers)))

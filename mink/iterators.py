@@ -1,3 +1,8 @@
+"""Contains batch iterators and the iterator pipeline to chain
+iterators.
+
+"""
+
 import numpy as np
 from sklearn.base import BaseEstimator
 from sklearn.base import TransformerMixin
@@ -5,6 +10,13 @@ from sklearn.utils import tosequence
 
 
 class IteratorPipeline(BaseEstimator, TransformerMixin):
+    """A pipeline that is responsible for batching and, optionally,
+    applying transforms on a batch level. Similar in use to an
+    sklearn.pipeline.Pipeline.
+
+    Should be used with the iterator protocol.
+
+    """
     def __init__(
             self,
             batch_size=128,
@@ -35,6 +47,7 @@ class IteratorPipeline(BaseEstimator, TransformerMixin):
                                 " '%s' (type %s) doesn't)" % (t, type(t)))
 
     def get_params(self, deep=True):
+        """TODO"""
         if not deep:
             return super().get_params(deep=False)
         else:
@@ -51,6 +64,7 @@ class IteratorPipeline(BaseEstimator, TransformerMixin):
         return dict(self.steps)
 
     def fit(self, X, y, **kwargs):
+        """TODO"""
         transform_steps = dict((step, {}) for step, __ in self.steps)
         for pname, pval in kwargs.items():
             step, param = pname.split('__', 1)
@@ -61,8 +75,9 @@ class IteratorPipeline(BaseEstimator, TransformerMixin):
         return self
 
     def transform(self, X, y=None, **kwargs):
+        """TODO"""
         Xt, yt = X, y
-        for __, transform in self.steps:
+        for _, transform in self.steps:
             Xt, yt = transform.transform(
                 Xt,
                 yt,
@@ -71,17 +86,23 @@ class IteratorPipeline(BaseEstimator, TransformerMixin):
         return Xt, yt
 
     def iter_transform(self, X, y=None, **kwargs):
-        bs = self.batch_size
+        """Batch all X (and y) and apply transforms.
+
+        This could be useful if you want to inspect the transformed
+        data.
+
+        """
+        batch_size = self.batch_size
         Xt = []
         if y is not None:
             yt = []
         else:
             yt = y
 
-        for i in range((X.shape[0] + bs - 1) // bs):
-            Xb = X[i * bs:(i + 1) * bs]
+        for i in range((X.shape[0] + batch_size - 1) // batch_size):
+            Xb = X[i * batch_size:(i + 1) * batch_size]
             if y is not None:
-                yb = y[i * bs:(i + 1) * bs]
+                yb = y[i * batch_size:(i + 1) * batch_size]
             else:
                 yb = None
 
@@ -91,22 +112,24 @@ class IteratorPipeline(BaseEstimator, TransformerMixin):
         return np.concatenate(Xt), np.concatenate(yt)
 
     def fit_transform(self, X, y, **kwargs):
+        """TODO"""
         return self.fit(
             X, y, **kwargs
         ).transform(
             X, y, **kwargs)
 
     def __call__(self, X, y=None):
+        # pylint: disable=attribute-defined-outside-init
         self.X_ = X
         self.y_ = y
         return self
 
     def __iter__(self):
-        X, y, bs = self.X_, self.y_, self.batch_size
-        for i in range((X.shape[0] + bs - 1) // bs):
-            Xb = X[i * bs:(i + 1) * bs]
+        X, y, batch_size = self.X_, self.y_, self.batch_size
+        for i in range((X.shape[0] + batch_size - 1) // batch_size):
+            Xb = X[i * batch_size:(i + 1) * batch_size]
             if y is not None:
-                yb = y[i * bs:(i + 1) * bs]
+                yb = y[i * batch_size:(i + 1) * batch_size]
             else:
                 yb = None
             yield self.transform(Xb, yb)
@@ -120,6 +143,7 @@ class IteratorPipeline(BaseEstimator, TransformerMixin):
 
 
 class Iterator(BaseEstimator, TransformerMixin):
+    """Iterator base class."""
     def fit(self, X, y, **kwargs):
         return self
 
@@ -134,6 +158,7 @@ class Iterator(BaseEstimator, TransformerMixin):
 
 
 class GaussianNoiseIterator(Iterator):
+    """Apply gaussian noise to data."""
     def __init__(
             self,
             mean=0.0,

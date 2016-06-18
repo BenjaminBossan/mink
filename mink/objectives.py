@@ -1,3 +1,11 @@
+"""Contains all objectives (loss or error functions).
+
+Often, objectives are simple tensorflow expressions. However, it
+could still be useful to wrap them as classes for use cases such as
+testing `isinstance(obj, Objective)`.
+
+"""
+
 from sklearn.base import BaseEstimator
 import tensorflow as tf
 
@@ -8,6 +16,7 @@ class Objective(BaseEstimator):
 
 
 class CrossEntropy(Objective):
+    """Cross entropy error."""
     def __init__(self, eps=1e-12):
         self.eps = eps
 
@@ -21,5 +30,6 @@ class CrossEntropy(Objective):
 
 
 class MeanSquaredError(Objective):
+    """Mean squared error."""
     def __call__(self, y_true, y_transformed):
         return tf.reduce_mean(tf.square(y_true - y_transformed))

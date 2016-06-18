@@ -1,3 +1,6 @@
+# pylint: disable=invalid-name,missing-docstring,no-self-use
+# pylint: disable=old-style-class,no-init
+
 import pytest
 
 from mink import layers

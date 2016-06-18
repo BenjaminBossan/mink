@@ -1,3 +1,7 @@
+"""Contains definition of the (abstract) base class of layers."""
+
+# pylint: disable=super-init-not-called
+
 from functools import wraps
 
 import numpy as np
@@ -30,10 +34,10 @@ __all__ = [
 ]
 
 
-def transform_decorator(f):
-    @wraps(f)
+def transform_decorator(func):
+    @wraps(func)
     def wrapper(*args, **kwargs):
-        out = f(*args, **kwargs)
+        out = func(*args, **kwargs)
         layer = args[0]
 
         # set output shape
@@ -49,23 +53,24 @@ def transform_decorator(f):
 
 
 class _Layer(type):
-    def __new__(cls, name, base, attrs):
+    def __new__(mcs, name, base, attrs):
         to_decorate = ['transform']
         to_decorate += attrs.get('fit_transform', [])
         for method in to_decorate:
             attrs[method] = transform_decorator(attrs[method])
 
-        return super().__new__(cls, name, base, attrs)
+        return super().__new__(mcs, name, base, attrs)
 
 
 class Layer(BaseEstimator, TransformerMixin, metaclass=_Layer):
+    """TODO"""
     def __init__(self, incoming, name=None, make_logs=False):
         raise NotImplementedError
 
     def fit(self, Xs, ys, **kwargs):
         raise NotImplementedError
 
-    def transform(self, Xs, ys=None, **kwargs):
+    def transform(self, Xs, **kwargs):
         raise NotImplementedError
 
     def add_param(self, name, value, force=False):
@@ -138,6 +143,7 @@ def _identity(X):
 
 
 class FunctionLayer(Layer):
+    """TODO"""
     def __init__(self, incoming, func=None, name=None, make_logs=False):
         self.incoming = incoming
         self.func = func
@@ -148,13 +154,14 @@ class FunctionLayer(Layer):
         self.incoming.fit(Xs, ys, **kwargs)
         return self
 
-    def transform(self, Xs, ys=None, **kwargs):
-        Xs_inc = self.incoming.transform(Xs, ys, **kwargs)
+    def transform(self, Xs, **kwargs):
+        Xs_inc = self.incoming.transform(Xs, **kwargs)
         func = self.func if self.func is not None else _identity
         return func(Xs_inc)
 
 
 class InputLayer(Layer):
+    """TODO"""
     def __init__(
             self,
             Xs=None,
@@ -178,11 +185,13 @@ class InputLayer(Layer):
             self.ys_ = self.ys
         return self
 
-    def transform(self, Xs, ys=None, **kwargs):
+    def transform(self, Xs, **kwargs):
         return self.Xs_
 
 
+# pylint: disable=too-many-instance-attributes
 class DenseLayer(Layer):
+    """TODO"""
     def __init__(
             self,
             incoming=None,
@@ -213,9 +222,8 @@ class DenseLayer(Layer):
 
         return self
 
-    @transform_decorator
-    def transform(self, Xs, ys=None, **kwargs):
-        Xs_inc = self.incoming.transform(Xs, ys, **kwargs)
+    def transform(self, Xs, **kwargs):
+        Xs_inc = self.incoming.transform(Xs, **kwargs)
         if len(Xs_inc.get_shape()) > 2:
             Xs_inc = flatten(Xs_inc, 2)
 
@@ -224,7 +232,9 @@ class DenseLayer(Layer):
         return self.nonlinearity_(X)
 
 
+# pylint: disable=too-many-instance-attributes,too-many-arguments
 class Conv2DLayer(Layer):
+    """TODO"""
     def __init__(
             self,
             incoming,
@@ -259,8 +269,8 @@ class Conv2DLayer(Layer):
 
         filter_size = as_tuple(
             self.filter_size,
-            N=2,
-            t=int,
+            num=2,
+            dtype=int,
         )
 
         self.strides_ = as_4d(self.stride)
@@ -276,8 +286,8 @@ class Conv2DLayer(Layer):
 
         return self
 
-    def transform(self, Xs, ys=None, **kwargs):
-        Xs_inc = self.incoming.transform(Xs, ys, **kwargs)
+    def transform(self, Xs, **kwargs):
+        Xs_inc = self.incoming.transform(Xs, **kwargs)
 
         conved = tf.nn.conv2d(
             Xs_inc,
@@ -291,6 +301,7 @@ class Conv2DLayer(Layer):
 
 
 class MaxPool2DLayer(Layer):
+    """TODO"""
     def __init__(
             self,
             incoming,
@@ -320,8 +331,8 @@ class MaxPool2DLayer(Layer):
 
         return self
 
-    def transform(self, Xs, ys=None, **kwargs):
-        Xs_inc = self.incoming.transform(Xs, ys, **kwargs)
+    def transform(self, Xs, **kwargs):
+        Xs_inc = self.incoming.transform(Xs, **kwargs)
         return tf.nn.max_pool(
             Xs_inc,
             ksize=self.pool_size_,
@@ -331,6 +342,7 @@ class MaxPool2DLayer(Layer):
 
 
 class DropoutLayer(Layer):
+    """TODO"""
     def __init__(
             self,
             incoming,
@@ -339,7 +351,7 @@ class DropoutLayer(Layer):
             make_logs=False,
     ):
         self.incoming = incoming
-        self.p = p
+        self.p = p  # pylint: disable=invalid-name
         self.name = name
         self.make_logs = make_logs
 
@@ -347,8 +359,8 @@ class DropoutLayer(Layer):
         self.incoming.fit(Xs, ys, **kwargs)
         return self
 
-    def transform(self, Xs, ys=None, **kwargs):
-        Xs_inc = self.incoming.transform(Xs, ys, **kwargs)
+    def transform(self, Xs, **kwargs):
+        Xs_inc = self.incoming.transform(Xs, **kwargs)
 
         deterministic = kwargs.get(
             'deterministic',
@@ -363,6 +375,7 @@ class DropoutLayer(Layer):
 
 
 class ConcatLayer(Layer):
+    """TODO"""
     def __init__(
             self,
             incomings,
@@ -380,8 +393,8 @@ class ConcatLayer(Layer):
             incoming.fit(Xs, ys, **kwargs)
         return self
 
-    def transform(self, Xs, ys=None, **kwargs):
-        Xs_incs = [incoming.transform(Xs, ys, **kwargs) for
+    def transform(self, Xs, **kwargs):
+        Xs_incs = [incoming.transform(Xs, **kwargs) for
                    incoming in self.incomings]
         return tf.concat(
             values=Xs_incs,
@@ -390,6 +403,7 @@ class ConcatLayer(Layer):
 
 
 class ImageResizeLayer(Layer):
+    """TODO"""
     def __init__(
             self,
             incoming,
@@ -406,15 +420,15 @@ class ImageResizeLayer(Layer):
 
     def fit(self, Xs, ys, **kwargs):
         Xs_inc = self.incoming.fit_transform(Xs, ys, **kwargs)
-        __, height, width, __ = get_shape(Xs_inc)
+        _, height, width, _ = get_shape(Xs_inc)
         scale_height, scale_width = as_tuple(self.scale, 2)
 
         self.new_height_ = int(scale_height * height)
         self.new_width_ = int(scale_width * width)
         return self
 
-    def transform(self, Xs, ys=None, **kwargs):
-        Xs_inc = self.incoming.transform(Xs, ys, **kwargs)
+    def transform(self, Xs, **kwargs):
+        Xs_inc = self.incoming.transform(Xs, **kwargs)
         return tf.image.resize_images(
             images=Xs_inc,
             new_height=self.new_height_,
