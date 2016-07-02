@@ -6,9 +6,13 @@ A neural network library based on tensorflow and with true sklearn compatibility
 
 Lasagne + nolearn - theano + tensorflow = mink
 
+## State
+
+This is in very early stage of development. Help with development is welcome.
+
 ## Example
 
-See notebooks 
+For more elaborate use cases, see notebooks 
 [here](https://github.com/BenjaminBossan/mink/blob/master/simple_CNN_01.ipynb)
 and
 [here](https://github.com/BenjaminBossan/mink/blob/master/simple_example_with_GS.ipynb).
@@ -21,7 +25,7 @@ from mink import layers
 # Get classification data
 X, y = make_classification(n_samples=2000, n_classes=5, n_informative=10)
 
-# Define network architecture: no need to set shape if incoming data, 
+# Define network architecture: no need to set shape of incoming data, 
 # number of classes, softmax nonlinearity or anything.
 
 l = layers.InputLayer()
