@@ -14,6 +14,11 @@ from mink import NeuralNetRegressor
 from mink import layers
 
 
+def pytest_addoption(parser):
+    parser.addoption("--runslow", action="store_true",
+                     help="run slow tests")
+
+
 @pytest.fixture
 def session_kwargs():
     gpu_options = tf.GPUOptions(per_process_gpu_memory_fraction=0.25)

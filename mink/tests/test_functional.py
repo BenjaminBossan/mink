@@ -11,6 +11,12 @@ from sklearn.metrics import accuracy_score
 from sklearn.metrics import mean_squared_error
 
 
+slow = pytest.mark.skipif(
+    not pytest.config.getoption("--runslow"),
+    reason="need --runslow option to run"
+)
+
+
 class TestSaveLoadModel:
     @pytest.fixture
     def net_cls(self):
@@ -257,6 +263,7 @@ class TestSklearnCompatibility:
         from sklearn.utils.estimator_checks import check_estimator
         check_estimator(est)
 
+    @slow
     def test_grid_search(self, clf_net, clf_data, param_grid):
         X, y = clf_data
 
