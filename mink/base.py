@@ -1,5 +1,7 @@
 """Module contains estimators and the estimator base class."""
 
+import time
+
 import numpy as np
 from sklearn.base import BaseEstimator
 from sklearn.base import TransformerMixin
@@ -43,6 +45,7 @@ class NeuralNetBase(BaseEstimator, TransformerMixin):
             encoder,
             session_kwargs,
             on_training_started,
+            on_epoch_finished,
             verbose,
     ):
         self.layer = layer
@@ -54,6 +57,7 @@ class NeuralNetBase(BaseEstimator, TransformerMixin):
         self.encoder = encoder
         self.session_kwargs = session_kwargs
         self.on_training_started = on_training_started
+        self.on_epoch_finished = on_epoch_finished
         self.verbose = verbose
 
     def initialize(self, X=None, y=None):
@@ -124,9 +128,10 @@ class NeuralNetBase(BaseEstimator, TransformerMixin):
         self.ys_ = ys
         self.deterministic_ = deterministic
         self.feed_forward_ = ys_ff
+        self.train_history_ = []
         self._initialized = True
 
-    def _initalize_output_layer(self, layer, output_shape):
+    def _initialize_output_layer(self, layer, output_shape):
         raise NotImplementedError
 
     def _get_input_shapes(self, X):
@@ -216,11 +221,11 @@ class NeuralNetBase(BaseEstimator, TransformerMixin):
 
     def train_loop(self, X, y, num_epochs):
         """TODO"""
-        template = "epochs: {:>4} | loss: {:.5f}"
         summary = tf.merge_all_summaries()
 
-        for i in range(num_epochs):
+        for epoch in range(num_epochs):
             losses = []
+            tic = time.time()
             for Xb, yb in self.batch_iterator_train_(X, y):
                 inputs = [self.train_step_, self.loss_]
                 if summary is not None:
@@ -245,12 +250,22 @@ class NeuralNetBase(BaseEstimator, TransformerMixin):
                     losses.append(loss)
 
             if logs:
-                self.tensorboard_logs_.add_summary(logs, i)
+                self.tensorboard_logs_.add_summary(logs, epoch)
             if self.verbose:
-                # TODO: should use np.average at some point
-                print(template.format(i + 1, np.mean(loss)))
+                self._callback_on_epoch_finished(locals())
 
         return self
+
+    def _callback_on_epoch_finished(self, state):
+        info = {
+            'epoch': state['epoch'] + 1,
+            # TODO: should use np.average at some point
+            'train loss': np.mean(state['losses']),
+            'dur':  time.time() - state['tic'],
+        }
+        self.train_history_.append(info)
+        for func in self.on_epoch_finished:
+            func(self)
 
     def predict(self, X):
         raise NotImplementedError
@@ -369,6 +384,7 @@ class NeuralNetClassifier(NeuralNetBase):
             encoder=LabelBinarizer(),
             session_kwargs=None,
             on_training_started=(handlers.PrintLayerInfo(),),
+            on_epoch_finished=(handlers.PrintTrainProgress(),),
     ):
         self.layer = layer
         self.objective = objective
@@ -380,6 +396,7 @@ class NeuralNetClassifier(NeuralNetBase):
         self.encoder = encoder
         self.session_kwargs = session_kwargs
         self.on_training_started = on_training_started
+        self.on_epoch_finished = on_epoch_finished
 
     def _initialize_output_layer(self, layer, output_shape):
         if isinstance(layer, DenseLayer):
@@ -428,6 +445,7 @@ class NeuralNetRegressor(NeuralNetBase):
             encoder=None,
             session_kwargs=None,
             on_training_started=(handlers.PrintLayerInfo(),),
+            on_epoch_finished=(handlers.PrintTrainProgress(),),
     ):
         self.layer = layer
         self.objective = objective
@@ -439,6 +457,7 @@ class NeuralNetRegressor(NeuralNetBase):
         self.encoder = encoder
         self.session_kwargs = session_kwargs
         self.on_training_started = on_training_started
+        self.on_epoch_finished = on_epoch_finished
 
     def _initialize_output_layer(self, layer, output_shape):
         if isinstance(layer, DenseLayer):
