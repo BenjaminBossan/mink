@@ -222,12 +222,12 @@ class NeuralNetBase(BaseEstimator, TransformerMixin):
     def train_loop(self, X, y, num_epochs):
         """TODO"""
         summary = tf.merge_all_summaries()
+        inputs = [self.train_step_, self.loss_]
 
         for epoch in range(num_epochs):
             losses = []
             tic = time.time()
             for Xb, yb in self.batch_iterator_train_(X, y):
-                inputs = [self.train_step_, self.loss_]
                 if summary is not None:
                     inputs += [summary]
                 feed_dict = {
