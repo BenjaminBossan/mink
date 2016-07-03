@@ -142,6 +142,10 @@ class IteratorPipeline(BaseEstimator, TransformerMixin):
         return state
 
 
+def _identity(X):
+    return X
+
+
 class Iterator(BaseEstimator, TransformerMixin):
     """Iterator base class."""
     def fit(self, X, y, **kwargs):
@@ -175,3 +179,22 @@ class GaussianNoiseIterator(Iterator):
             noise *= self.std
             noise += self.mean
             return X + noise.astype(X.dtype), y
+
+
+class FunctionIterator(Iterator):
+    def __init__(
+            self,
+            func=None,
+            func_deterministic=None,
+    ):
+        self.func = func
+        self.func_deterministic = func_deterministic
+
+    def transform(self, X, y, deterministic, **kwargs):
+        func = self.func or _identity
+        func_deterministic = self.func_deterministic or func
+
+        if deterministic:
+            return func_deterministic(X), y
+        else:
+            return func(X), y
