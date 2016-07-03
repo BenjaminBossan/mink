@@ -34,18 +34,38 @@ __all__ = [
 
 class Layer(BaseEstimator, TransformerMixin):
     """TODO"""
-    def __init__(self, incoming, name=None, make_logs=False):
+    def __init__(self, incoming=None, name=None, make_logs=False):
         raise NotImplementedError
 
-    def fit(self, Xs, ys=None, **kwargs):
-        self.incoming.fit(Xs, ys, **kwargs)
+    def initialize(self, Xs, ys=None, **kwargs):
+        incomings = getattr(self, 'incoming', 0) or getattr(self, 'incomings')
+        if not isinstance(incomings, list):
+            incomings = [incomings]
+
+        for incoming in incomings:
+            incoming.initialize(Xs, ys, **kwargs)
+
+        Xs_incs = [incoming.get_output(Xs, **kwargs) for incoming in incomings]
+        if len(Xs_incs) == 1:
+            Xs_incs = Xs_incs[0]
+
+        self.fit(Xs_incs, ys, **kwargs)
         return self
 
-    def transform(self, Xs, **kwargs):
+    def fit(self, Xs_inc, ys=None, **kwargs):
+        return self
+
+    def get_output(self, Xs, **kwargs):
         # handle transformation of Xs
-        incoming = getattr(self, 'incoming') or getattr(self, 'incomings')
-        Xs_inc = incoming.transform(Xs, **kwargs)
-        X_out = self.__call__(Xs_inc, **kwargs)
+        incomings = getattr(self, 'incoming', 0) or getattr(self, 'incomings')
+        if not isinstance(incomings, list):
+            incomings = [incomings]
+
+        Xs_incs = [incoming.get_output(Xs, **kwargs) for incoming in incomings]
+        if len(Xs_incs) == 1:
+            Xs_incs = Xs_incs[0]
+
+        X_out = self.transform(Xs_incs, **kwargs)
         self.output_shape = get_shape(X_out)
 
         # handle tensorflow logging
@@ -54,7 +74,7 @@ class Layer(BaseEstimator, TransformerMixin):
             tf.histogram_summary(layer_name + ' activity', X_out)
         return X_out
 
-    def __call__(self, Xs_inc, **kwargs):
+    def transform(self, Xs_inc, **kwargs):
         raise NotImplementedError
 
     def add_param(self, name, value, force=False):
@@ -128,13 +148,13 @@ def _identity(X):
 
 class FunctionLayer(Layer):
     """TODO"""
-    def __init__(self, incoming, func=None, name=None, make_logs=False):
+    def __init__(self, incoming=None, func=None, name=None, make_logs=False):
         self.incoming = incoming
         self.func = func
         self.name = name
         self.make_logs = make_logs
 
-    def __call__(self, Xs_inc, **kwargs):
+    def transform(self, Xs_inc, **kwargs):
         func = self.func if self.func is not None else _identity
         return func(Xs_inc)
 
@@ -153,6 +173,10 @@ class InputLayer(Layer):
         self.name = name
         self.make_logs = make_logs
 
+    def initialize(self, Xs, ys, **kwargs):
+        self.fit(Xs, ys, **kwargs)
+        return self
+
     def fit(self, Xs, ys=None, **kwargs):
         if self.Xs is None:
             self.Xs_ = Xs
@@ -165,10 +189,10 @@ class InputLayer(Layer):
         self.output_shape = get_shape(self.Xs_)
         return self
 
-    def transform(self, Xs, **kwargs):
+    def get_output(self, Xs, **kwargs):
         return self.Xs_
 
-    def __call__(self, Xs_inc, **kwargs):
+    def transform(self, Xs_inc, **kwargs):
         return Xs_inc
 
 
@@ -193,9 +217,7 @@ class DenseLayer(Layer):
         self.name = name
         self.make_logs = make_logs
 
-    def fit(self, Xs, ys=None, **kwargs):
-        Xs_inc = self.incoming.fit_transform(Xs, ys, **kwargs)
-
+    def fit(self, Xs_inc, ys=None, **kwargs):
         self.num_units_ = self.num_units or 100
         self.nonlinearity_ = self.nonlinearity or nonlinearities.Rectify()
 
@@ -205,7 +227,7 @@ class DenseLayer(Layer):
 
         return self
 
-    def __call__(self, Xs_inc, **kwargs):
+    def transform(self, Xs_inc, **kwargs):
         if len(Xs_inc.get_shape()) > 2:
             Xs_inc = flatten(Xs_inc, 2)
 
@@ -219,7 +241,7 @@ class Conv2DLayer(Layer):
     """TODO"""
     def __init__(
             self,
-            incoming,
+            incoming=None,
             num_filters=32,
             filter_size=3,
             stride=1,
@@ -246,9 +268,7 @@ class Conv2DLayer(Layer):
             raise ValueError("`padding` must be one of {}.".format(
                 ', '.join(allowed)))
 
-    def fit(self, Xs, ys=None, **kwargs):
-        Xs_inc = self.incoming.fit_transform(Xs, ys, **kwargs)
-
+    def fit(self, Xs_inc, ys=None, **kwargs):
         filter_size = as_tuple(
             self.filter_size,
             num=2,
@@ -268,7 +288,7 @@ class Conv2DLayer(Layer):
 
         return self
 
-    def __call__(self, Xs_inc, **kwargs):
+    def transform(self, Xs_inc, **kwargs):
         conved = tf.nn.conv2d(
             Xs_inc,
             filter=self.W_,
@@ -284,7 +304,7 @@ class MaxPool2DLayer(Layer):
     """TODO"""
     def __init__(
             self,
-            incoming,
+            incoming=None,
             pool_size=2,
             stride=2,
             padding='SAME',
@@ -303,15 +323,12 @@ class MaxPool2DLayer(Layer):
             raise ValueError("`padding` must be one of {}.".format(
                 ', '.join(allowed)))
 
-    def fit(self, Xs, ys, **kwargs):
-        self.incoming.fit(Xs, ys, **kwargs)
-
+    def fit(self, Xs_inc, ys, **kwargs):
         self.pool_size_ = as_4d(self.pool_size)
         self.strides_ = as_4d(self.stride)
-
         return self
 
-    def __call__(self, Xs_inc, **kwargs):
+    def transform(self, Xs_inc, **kwargs):
         return tf.nn.max_pool(
             Xs_inc,
             ksize=self.pool_size_,
@@ -324,7 +341,7 @@ class DropoutLayer(Layer):
     """TODO"""
     def __init__(
             self,
-            incoming,
+            incoming=None,
             p=0.5,
             name=None,
             make_logs=False,
@@ -334,7 +351,7 @@ class DropoutLayer(Layer):
         self.name = name
         self.make_logs = make_logs
 
-    def __call__(self, Xs_inc, **kwargs):
+    def transform(self, Xs_inc, **kwargs):
         deterministic = kwargs.get(
             'deterministic',
             tf.Variable(False))
@@ -351,7 +368,7 @@ class ConcatLayer(Layer):
     """TODO"""
     def __init__(
             self,
-            incomings,
+            incomings=None,
             axis=1,
             name=None,
             make_logs=False,
@@ -361,12 +378,7 @@ class ConcatLayer(Layer):
         self.name = name
         self.make_logs = make_logs
 
-    def fit(self, Xs, ys, **kwargs):
-        for incoming in self.incomings:
-            incoming.fit(Xs, ys, **kwargs)
-        return self
-
-    def __call__(self, Xs_incs, **kwargs):
+    def transform(self, Xs_incs, **kwargs):
         return tf.concat(
             values=Xs_incs,
             concat_dim=self.axis,
@@ -377,7 +389,7 @@ class ImageResizeLayer(Layer):
     """TODO"""
     def __init__(
             self,
-            incoming,
+            incoming=None,
             scale=2,
             resize_method=tf.image.ResizeMethod.BILINEAR,
             name=None,
@@ -389,8 +401,7 @@ class ImageResizeLayer(Layer):
         self.name = name
         self.make_logs = make_logs
 
-    def fit(self, Xs, ys, **kwargs):
-        Xs_inc = self.incoming.fit_transform(Xs, ys, **kwargs)
+    def fit(self, Xs_inc, ys, **kwargs):
         _, height, width, _ = get_shape(Xs_inc)
         scale_height, scale_width = as_tuple(self.scale, 2)
 
@@ -398,7 +409,7 @@ class ImageResizeLayer(Layer):
         self.new_width_ = int(scale_width * width)
         return self
 
-    def __call__(self, Xs_inc, **kwargs):
+    def transform(self, Xs_inc, **kwargs):
         return tf.image.resize_images(
             images=Xs_inc,
             new_height=self.new_height_,

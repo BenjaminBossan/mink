@@ -1,7 +1,14 @@
 # pylint: disable=invalid-name,missing-docstring,no-self-use
 # pylint: disable=old-style-class,no-init
 
+import numpy as np
 import pytest
+import tensorflow as tf
+
+from mink import layers
+from mink import nonlinearities
+from mink import objectives
+from mink import updates
 
 
 slow = pytest.mark.skipif(
@@ -133,3 +140,63 @@ class TestSetParams:
 
         l2.set_params(l2__incoming__Xs=777)
         assert l0.Xs == 777
+
+
+class TestSklearnPipeline:
+    @pytest.fixture
+    def layer_lst(self):
+        return [
+            layers.InputLayer(),
+            layers.DenseLayer(),
+            layers.DenseLayer(
+                num_units=5,
+                nonlinearity=nonlinearities.Softmax(),
+            ),
+        ]
+
+    @pytest.fixture
+    def pipe(self, layer_lst):
+        from mink import make_network
+        return make_network(layer_lst)
+
+    @pytest.fixture
+    def Xs(self):
+        return tf.placeholder(dtype='float32', shape=(None, 20))
+
+    @pytest.fixture
+    def ys(self):
+        return tf.placeholder(dtype='float32', shape=(None, 5))
+
+    @pytest.fixture
+    def ys_out(self, pipe, Xs, ys):
+        ys_out = pipe.fit_transform(Xs, ys)
+        return ys_out
+
+    def test_manual_training(self, Xs, ys, ys_out, clf_data, session_kwargs):
+        from sklearn.preprocessing import LabelBinarizer
+
+        batch_size = 64
+        losses = []
+
+        X, y = clf_data
+        y = LabelBinarizer().fit_transform(y)
+
+        loss = objectives.CrossEntropy()(ys, ys_out)
+        train_step = updates.Momentum()(loss)
+        inputs = [train_step, loss]
+
+        init = tf.initialize_all_variables()
+        with tf.Session(**session_kwargs) as session:
+            session.run(init)
+            for epoch in range(30):
+                losses_epoch = []
+                for i in range((X.shape[0] + batch_size - 1) // batch_size):
+                    Xb = X[i * batch_size:(i + 1) * batch_size]
+                    yb = y[i * batch_size:(i + 1) * batch_size]
+
+                    feed_dict = {Xs: Xb, ys: yb}
+                    _, loss = session.run(inputs, feed_dict=feed_dict)
+                    losses_epoch.append(loss)
+                losses.append(np.mean(losses_epoch))
+
+        assert np.mean(losses[:5]) > 2 * np.mean(losses[5:])

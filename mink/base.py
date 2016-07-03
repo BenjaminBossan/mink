@@ -1,10 +1,12 @@
 """Module contains estimators and the estimator base class."""
 
+from collections import defaultdict
 import time
 
 import numpy as np
 from sklearn.base import BaseEstimator
 from sklearn.base import TransformerMixin
+from sklearn.pipeline import Pipeline
 from sklearn.preprocessing import LabelBinarizer
 import tensorflow as tf
 
@@ -15,14 +17,46 @@ from mink.config import floatX
 from mink.iterators import IteratorPipeline
 from mink.layers import DenseLayer
 from mink.updates import SGD
-from mink.utils import get_input_layers
 from mink.utils import get_all_layers
+from mink.utils import get_input_layers
+from mink.utils import get_layer_name
 from mink.utils import set_named_layer_param
 
 flags = tf.app.flags
 
 
-__all__ = ['NeuralNetClassifier', 'NeuralNetRegressor']
+__all__ = ['make_network', 'NeuralNetClassifier', 'NeuralNetRegressor']
+
+
+def _name_layers(layer_lst):
+    """Generate names for layers.
+
+    Only works for linear graph.
+
+    """
+
+    names = [get_layer_name(layer) for layer in layer_lst]
+    namecount = defaultdict(int)
+    for layer, name in zip(layer_lst, names):
+        namecount[name] += 1
+
+    for key, val in list(namecount.items()):
+        if val == 1:
+            del namecount[key]
+
+    for i, layer in reversed(list(enumerate(layer_lst))):
+        name = names[i]
+        if name in namecount:
+            names[i] += "-%d" % namecount[name]
+            namecount[name] -= 1
+        if hasattr(layer, 'incoming'):
+            layer.set_params(incoming=layer_lst[i - 1])
+
+    return list(zip(names, layer_lst))
+
+
+def make_network(layers_lst):
+    return Pipeline(_name_layers(layers_lst))
 
 
 # pylint: disable=super-init-not-called,too-many-arguments
@@ -91,7 +125,8 @@ class NeuralNetBase(BaseEstimator, TransformerMixin):
             layer = self.layer
 
         self._initialize_output_layer(layer, output_shape)
-        ys_ff = layer.fit_transform(Xs, ys, deterministic=deterministic)
+        layer.initialize(Xs, ys, deterministic=deterministic)
+        ys_ff = layer.get_output(Xs, deterministic=deterministic)
         loss = self.objective(ys, ys_ff)
         train_step = self.update(loss)
 
@@ -223,13 +258,13 @@ class NeuralNetBase(BaseEstimator, TransformerMixin):
         """TODO"""
         summary = tf.merge_all_summaries()
         inputs = [self.train_step_, self.loss_]
+        if summary is not None:
+            inputs += [summary]
 
         for epoch in range(num_epochs):
             losses = []
             tic = time.time()
             for Xb, yb in self.batch_iterator_train_(X, y):
-                if summary is not None:
-                    inputs += [summary]
                 feed_dict = {
                     self.Xs_: Xb,
                     self.ys_: yb,
