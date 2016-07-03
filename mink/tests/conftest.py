@@ -37,13 +37,12 @@ def clf_data():
 
 @pytest.fixture
 def regr_data():
-    X, y = make_regression(
+    return make_regression(
         n_samples=2000,
         n_targets=1,
         n_informative=10,
         random_state=0,
     )
-    return X, y.reshape(-1, 1)
 
 
 @pytest.fixture
