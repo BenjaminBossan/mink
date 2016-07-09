@@ -258,12 +258,17 @@ class NeuralNetBase(BaseEstimator, TransformerMixin):
         """TODO"""
         summary = tf.merge_all_summaries()
         inputs = [self.train_step_, self.loss_]
+        state = {}
         if summary is not None:
             inputs += [summary]
 
         for epoch in range(num_epochs):
-            losses = []
+            train_losses = []
             tic = time.time()
+            state['epoch'] = epoch
+            state['train_losses'] = train_losses
+            state['tic'] = tic
+
             for Xb, yb in self.batch_iterator_train_(X, y):
                 feed_dict = {
                     self.Xs_: Xb,
@@ -281,8 +286,7 @@ class NeuralNetBase(BaseEstimator, TransformerMixin):
                     _, loss = output
                     logs = None
 
-                if self.verbose:
-                    losses.append(loss)
+                train_losses.append(loss)
 
             if logs:
                 self.tensorboard_logs_.add_summary(logs, epoch)
@@ -295,8 +299,8 @@ class NeuralNetBase(BaseEstimator, TransformerMixin):
         info = {
             'epoch': state['epoch'] + 1,
             # TODO: should use np.average at some point
-            'train loss': np.mean(state['losses']),
-            'dur':  time.time() - state['tic'],
+            'train loss': np.mean(state['train_losses']),
+            'dur': time.time() - state['tic'],
         }
         self.train_history_.append(info)
         for func in self.on_epoch_finished:
