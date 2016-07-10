@@ -3,6 +3,7 @@
 
 from unittest.mock import Mock
 
+import numpy as np
 import pytest
 import tensorflow as tf
 
@@ -136,3 +137,145 @@ class TestAllLayers:
         assert not hasattr(layer, 'output_shape')
         layer.get_output(Xs_4d)
         assert isinstance(layer.output_shape, tuple)
+
+
+class TestLayerAddParam:
+    def get_value(self, param):
+        gpu_options = tf.GPUOptions(per_process_gpu_memory_fraction=0.25)
+        config = tf.ConfigProto(gpu_options=gpu_options)
+        init = tf.initialize_all_variables()
+        with tf.Session(config=config) as session:
+            session.run(init)
+            session.run(param)
+            return param.eval(session)
+
+    @pytest.fixture
+    def layer_cls(self):
+        from mink.layers import Layer
+
+        class MyLayer(Layer):
+            def __init__(self):
+                pass
+        return MyLayer
+
+    @pytest.fixture
+    def layer(self, layer_cls):
+        return layer_cls()
+
+    def test_add_param_incorrect_name(self, layer):
+        with pytest.raises(ValueError) as exc:
+            layer.add_param(
+                spec=np.zeros,
+                shape=(3, 4),
+                name='my_param',
+            )
+
+        assert str(exc.value) == (
+            "Parameter names should end in '_', e.g. 'W_'.")
+
+    def test_add_param_sets_params(self, layer):
+        layer.add_param(
+            spec=np.ones,
+            shape=(2, 3, 4),
+            name='myparam_',
+        )
+        assert layer.params_['myparam_'] is layer.myparam_
+
+    def test_add_param_no_shape(self, layer):
+        with pytest.raises(TypeError) as exc:
+            layer.add_param(
+                spec=np.ones,
+                name='myparam_',
+            )
+        assert str(exc.value) == 'Cannot add this parameter without a shape.'
+
+    def test_add_param_with_numpy_array_correct_value(self, layer):
+        layer.add_param(
+            spec=np.ones,
+            shape=(2, 3, 4),
+            name='myparam_',
+        )
+        value = self.get_value(layer.myparam_)
+        assert np.allclose(value, np.ones((2, 3, 4)))
+
+    def test_add_param_override_no_force(self, layer):
+        layer.add_param(
+            spec=np.ones,
+            shape=(2, 3, 4),
+            name='myparam_',
+        )
+        layer.add_param(
+            spec=np.ones,
+            shape=(5, 6),
+            name='myparam_',
+        )
+        value = self.get_value(layer.myparam_)
+        assert np.allclose(value, np.ones((2, 3, 4)))
+
+    def test_add_param_override_with_force(self, layer):
+        layer.add_param(
+            spec=np.ones,
+            shape=(2, 3, 4),
+            name='myparam_',
+        )
+        layer.add_param(
+            spec=np.ones,
+            shape=(5, 6),
+            name='myparam_',
+            force=True,
+        )
+        value = self.get_value(layer.myparam_)
+        assert np.allclose(value, np.ones((5, 6)))
+
+    def test_add_param_with_initializer_correct_value(self, layer):
+        from mink.inits import Constant
+
+        layer.add_param(
+            spec=Constant(),
+            shape=(2, 3, 4),
+            name='myparam_',
+        )
+        value = self.get_value(layer.myparam_)
+        assert np.allclose(value, np.zeros((2, 3, 4)))
+
+    def test_add_param_tf_variable_correct_value(self, layer):
+        layer.add_param(
+            spec=tf.Variable(tf.ones((4, 1))),
+            name='myparam_',
+        )
+        value = self.get_value(layer.myparam_)
+        assert np.allclose(value, np.ones((4, 1)))
+
+    def test_add_param_tf_variable_incorrect_shape(self, layer):
+        with pytest.raises(ValueError) as exc:
+            layer.add_param(
+                spec=tf.Variable(tf.ones((4, 1))),
+                shape=(1, 4),
+                name='myparam_',
+            )
+        assert str(exc.value) == (
+            'Inconsistent shapes: (4, 1) and (1, 4).')
+
+    @pytest.mark.xfail
+    def test_variables_share_weight(self, clf_data):
+        # Note: Variable sharing does not work yet. Not sure if
+        # possible without using tf scopes. As is, the variables are
+        # not updated at all, hence the last test fails.
+        X, y = clf_data
+        arr = np.random.random((20, 20)).astype(np.float32)
+        W0 = tf.Variable(arr)
+
+        l0 = layers.InputLayer()
+        l1 = layers.DenseLayer(l0, W=W0, num_units=20)
+        l2 = layers.DenseLayer(l1, W=W0, num_units=20)
+        l3 = layers.DenseLayer(l2)
+
+        from mink import NeuralNetClassifier
+        net = NeuralNetClassifier(l3)
+        net.fit(X, y, epochs=10)
+
+        w1 = self.get_value(l1.W_)
+        w2 = self.get_value(l2.W_)
+
+        assert np.allclose(w1, w2)
+        assert not np.allclose(w1, arr)

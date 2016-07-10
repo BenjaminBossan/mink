@@ -37,8 +37,16 @@ class DenseLayer(Layer):
         self.nonlinearity_ = self.nonlinearity or nonlinearities.Rectify()
 
         shape = get_shape(Xs_inc)
-        self.add_param('W_', self.W((np.prod(shape[1:]), self.num_units_)))
-        self.add_param('b_', self.b((1, self.num_units_)))
+        self.add_param(
+            spec=self.W,
+            shape=(np.prod(shape[1:]), self.num_units_),
+            name='W_',
+        )
+        self.add_param(
+            spec=self.b,
+            shape=(1, self.num_units_),
+            name='b_',
+        )
 
         return self
 

@@ -53,14 +53,22 @@ class Conv2DLayer(Layer):
 
         self.strides_ = as_4d(self.stride)
 
-        self.add_param('W_', self.W((
-            filter_size[0],
-            filter_size[1],
-            get_shape(Xs_inc)[3],
-            self.num_filters,
-        )))
+        self.add_param(
+            spec=self.W,
+            shape=(
+                filter_size[0],
+                filter_size[1],
+                get_shape(Xs_inc)[3],
+                self.num_filters,
+            ),
+            name='W_',
+        )
 
-        self.add_param('b_', self.b((self.num_filters,)))
+        self.add_param(
+            spec=self.b,
+            shape=(self.num_filters,),
+            name='b_',
+        )
 
         return self
 

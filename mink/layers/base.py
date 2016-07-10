@@ -56,13 +56,38 @@ class Layer(BaseEstimator, TransformerMixin):
     def transform(self, Xs_inc, **kwargs):
         raise NotImplementedError
 
-    def add_param(self, name, value, force=False):
+    def add_param(
+            self,
+            spec,
+            name,
+            shape=None,
+            force=False,
+    ):
+        if not name.endswith('_'):
+            raise ValueError("Parameter names should end in '_', e.g. 'W_'.")
+
         if not hasattr(self, 'params_'):
             self.params_ = {}
 
+        if (name in self.params_) and not force:
+            return
+
+        if hasattr(spec, 'get_shape'):
+            if (shape is not None) and (get_shape(spec) != shape):
+                raise ValueError("Inconsistent shapes: {} and {}.".format(
+                    get_shape(spec), shape))
+            param = spec
+        elif shape is None:
+            raise TypeError('Cannot add this parameter without a shape.')
+        else:
+            param = spec(shape)
+
+        if not isinstance(param, (tf.Variable, tf.Tensor)):
+            param = tf.Variable(param)
+
         if force or (name not in self.params_):
-            self.params_[name] = value
-            self.__dict__[name] = value
+            self.params_[name] = param
+            self.__dict__[name] = param
 
     def set_params(self, **params):
         """Set the parameters of this estimator.

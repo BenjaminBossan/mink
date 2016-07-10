@@ -381,15 +381,18 @@ class NeuralNetBase(BaseEstimator, TransformerMixin):
             for key, val in params.items():
                 if layer_params:
                     layer.add_param(
-                        key,
-                        layer.params_[key].assign(val),
+                        spec=layer.params_[key].assign(val),
+                        name=key,
                         force=True,
                     )
                     # it appears that you have to eval for the effect
                     # to take place
                     layer.params_[key].eval(session=self.session_)
                 else:
-                    layer.add_param(key, tf.Variable(val))
+                    layer.add_param(
+                        spec=tf.Variable(val),
+                        name=key,
+                    )
 
     def __getstate__(self):
         state = dict(self.__dict__)
