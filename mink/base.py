@@ -225,7 +225,7 @@ class NeuralNetBase(BaseEstimator, TransformerMixin):
             batch_iterator_test = self.batch_iterator_test
         return batch_iterator_train, batch_iterator_test
 
-    def fit(self, X, yt, num_epochs=None):
+    def fit(self, X, yt, epochs=None):
         """TODO"""
         if yt.ndim == 1:
             yt = yt.reshape(-1, 1)
@@ -242,19 +242,19 @@ class NeuralNetBase(BaseEstimator, TransformerMixin):
         self.batch_iterator_train_.fit(X, y)
         self.batch_iterator_test_.fit(X, y)
 
-        if num_epochs is None:
-            num_epochs = self.max_epochs
+        if epochs is None:
+            epochs = self.max_epochs
 
         for callback in self.on_training_started:
             callback(self)
 
         try:
-            self.train_loop(X, y, num_epochs=num_epochs)
+            self.train_loop(X, y, epochs=epochs)
         except KeyboardInterrupt:
             pass
         return self
 
-    def train_loop(self, X, y, num_epochs):
+    def train_loop(self, X, y, epochs):
         """TODO"""
         summary = tf.merge_all_summaries()
         inputs = [self.train_step_, self.loss_]
@@ -262,7 +262,7 @@ class NeuralNetBase(BaseEstimator, TransformerMixin):
         if summary is not None:
             inputs += [summary]
 
-        for epoch in range(num_epochs):
+        for epoch in range(epochs):
             train_losses = []
             tic = time.time()
             state['epoch'] = epoch

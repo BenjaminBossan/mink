@@ -18,7 +18,7 @@ class TestSaveLoadModel:
 
     def test_pickle_save_load(self, clf_net, clf_data, tmpdir):
         X, y = clf_data
-        clf_net.fit(X, y, num_epochs=10)
+        clf_net.fit(X, y, epochs=10)
         score_before = accuracy_score(y, clf_net.predict(X))
 
         p = tmpdir.mkdir('mink').join('testmodel.ckpt')
@@ -32,10 +32,29 @@ class TestSaveLoadModel:
         score_after = accuracy_score(y, new_net.predict(X))
         assert np.isclose(score_after, score_before)
 
+    def test_pickle_save_load_continue_training(
+            self, clf_net, clf_data, tmpdir):
+        X, y = clf_data
+        clf_net.fit(X, y, epochs=10)
+
+        p = tmpdir.mkdir('mink').join('testmodel.ckpt')
+        with open(str(p), 'wb') as f:
+            pickle.dump(clf_net, f)
+        del clf_net
+
+        with open(str(p), 'rb') as f:
+            new_net = pickle.load(f)
+
+        score_before = accuracy_score(y, new_net.predict(X))
+        new_net.fit(X, y, epochs=20)
+
+        score_after = accuracy_score(y, new_net.predict(X))
+        assert score_after - score_before > 0.05
+
     def test_load_params_from_other_model(
             self, net_cls, clf_net, clf_data, _layers):
         X, y = clf_data
-        clf_net.fit(X, y, num_epochs=10)
+        clf_net.fit(X, y, epochs=10)
         score_before = accuracy_score(y, clf_net.predict(X))
 
         new_net = net_cls(_layers)
@@ -63,10 +82,10 @@ def test_call_fit_with_custom_session_kwargs(_layers, clf_data):
 def test_call_fit_repeatedly(clf_net, clf_data):
     X, y = clf_data
 
-    clf_net.fit(X, y, num_epochs=15)
+    clf_net.fit(X, y, epochs=15)
     accuracy_before = (y == clf_net.predict(X)).mean()
 
-    clf_net.fit(X, y, num_epochs=5)
+    clf_net.fit(X, y, epochs=5)
     accuracy_after = (y == clf_net.predict(X)).mean()
 
     # after continuing fit, accuracy should decrease
@@ -77,11 +96,11 @@ class TestNeuralNetEstimatorsLearn:
     def test_neural_net_classifier_learns(self, clf_net, clf_data):
         X, y = clf_data
 
-        clf_net.fit(X, y, num_epochs=0)
+        clf_net.fit(X, y, epochs=0)
         score_before = accuracy_score(y, clf_net.predict(X))
         assert np.isclose(score_before, 1.0 / len(np.unique(y)), rtol=0.3)
 
-        clf_net.fit(X, y, num_epochs=50)
+        clf_net.fit(X, y, epochs=50)
         score_after = accuracy_score(y, clf_net.predict(X))
         min_improvement = score_before * (1 - score_before)
         assert score_after > score_before + min_improvement
@@ -89,11 +108,11 @@ class TestNeuralNetEstimatorsLearn:
     def test_neural_net_regressor_learns(self, regr_net, regr_data):
         X, y = regr_data
 
-        regr_net.fit(X, y, num_epochs=0)
+        regr_net.fit(X, y, epochs=0)
         score_before = mean_squared_error(y, regr_net.predict(X))
         assert np.isclose(score_before, (y ** 2).mean(), rtol=0.2)
 
-        regr_net.fit(X, y, num_epochs=10)
+        regr_net.fit(X, y, epochs=10)
         score_after = mean_squared_error(y, regr_net.predict(X))
         assert score_after < 0.01 * score_before
 
@@ -120,7 +139,7 @@ class TestNetIteratorPipeline:
         clf_net.batch_iterator_test = 229
 
         # does not raise
-        clf_net.fit(X, y, num_epochs=3)
+        clf_net.fit(X, y, epochs=3)
         clf_net.predict(X)
 
     def test_net_with_iterator_pipeline(self, clf_net, clf_data, iterators):
@@ -129,7 +148,7 @@ class TestNetIteratorPipeline:
         clf_net.batch_iterator_test = iterators[1]
 
         # does not raise
-        clf_net.fit(X, y, num_epochs=3)
+        clf_net.fit(X, y, epochs=3)
         clf_net.predict(X)
 
     def test_net_with_iterator_pipeline_set_params(
@@ -142,5 +161,5 @@ class TestNetIteratorPipeline:
         clf_net.set_params(batch_iterator_test__noise1__std=-2)
 
         # does not raise
-        clf_net.fit(X, y, num_epochs=3)
+        clf_net.fit(X, y, epochs=3)
         clf_net.predict(X)
