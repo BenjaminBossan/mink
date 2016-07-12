@@ -291,7 +291,7 @@ class NeuralNetBase(BaseEstimator, TransformerMixin):
             if logs:
                 self.tensorboard_logs_.add_summary(logs, epoch)
             if self.verbose:
-                self._callback_on_epoch_finished(locals())
+                self._callback_on_epoch_finished(state)
 
         return self
 
