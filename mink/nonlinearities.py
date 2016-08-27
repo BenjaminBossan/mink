@@ -11,8 +11,11 @@ import tensorflow as tf
 
 
 __all__ = [
+    'Linear',
     'Rectify',
+    'Sigmoid',
     'Softmax',
+    'Tanh',
 ]
 
 
@@ -31,6 +34,16 @@ class Rectify(Nonlinearity):
         return tf.nn.relu(Xs)
 
 
+class Sigmoid(Nonlinearity):
+    def __call__(self, Xs):
+        return tf.nn.sigmoid(Xs)
+
+
 class Softmax(Nonlinearity):
     def __call__(self, Xs):
         return tf.nn.softmax(Xs)
+
+
+class Tanh(Nonlinearity):
+    def __call__(self, Xs):
+        return tf.nn.tanh(Xs)
