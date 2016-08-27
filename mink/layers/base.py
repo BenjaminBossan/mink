@@ -141,7 +141,12 @@ class Layer(BaseEstimator, TransformerMixin):
     def __getstate__(self):
         state = dict(self.__dict__)
         for key in self.__dict__:
-            if key.endswith('_'):
+            # `transform` is cached, which does not play well with
+            # pickle
+            if (
+                    key.endswith('_') or
+                    (key == 'transform') or
+                    (key == '_transform')):
                 del state[key]
         return state
 
