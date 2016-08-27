@@ -101,7 +101,7 @@ class NeuralNetBase(BaseEstimator, TransformerMixin):
         # and outputs are saved as attributes on the input and output
         # layers and we don't need to infer them from data.
 
-        if getattr(self, '_initalized', None):
+        if getattr(self, '_initialized', None):
             return
 
         input_shapes = self._get_input_shapes(X)
@@ -397,7 +397,7 @@ class NeuralNetBase(BaseEstimator, TransformerMixin):
     def __getstate__(self):
         state = dict(self.__dict__)
         for key in self.__dict__:
-            if key.endswith('_'):
+            if key.endswith('_') or (key == '_initialized'):
                 del state[key]
         all_params = self.get_all_params()
         state['_all_params'] = all_params

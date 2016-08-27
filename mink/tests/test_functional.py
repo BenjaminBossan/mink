@@ -82,14 +82,14 @@ def test_call_fit_with_custom_session_kwargs(_layers, clf_data):
 def test_call_fit_repeatedly(clf_net, clf_data):
     X, y = clf_data
 
-    clf_net.fit(X, y, epochs=15)
+    clf_net.fit(X, y, epochs=5)
     accuracy_before = (y == clf_net.predict(X)).mean()
 
-    clf_net.fit(X, y, epochs=5)
+    clf_net.fit(X, y, epochs=15)
     accuracy_after = (y == clf_net.predict(X)).mean()
 
     # after continuing fit, accuracy should decrease
-    assert accuracy_after < accuracy_before
+    assert accuracy_before + 0.1 < accuracy_after
 
 
 class TestNeuralNetEstimatorsLearn:
