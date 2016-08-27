@@ -52,10 +52,10 @@ class TestAllLayers:
         def transform(self, X, **kwargs):
             return X
 
-        mock = Mock()
-        mock.fit.return_value = mock
+        mock = Mock(spec=Layer)
+        mock.fit = Mock(return_value=mock)
+        mock.transform = Mock(side_effect=lambda X, **kwargs: X)
         mock.fit_transform = fit_transform
-        mock.transform = transform
         mock.incoming = None
 
         class MockLayer(Layer):
@@ -137,6 +137,41 @@ class TestAllLayers:
         assert not hasattr(layer, 'output_shape')
         layer.get_output(Xs_4d)
         assert isinstance(layer.output_shape, tuple)
+
+    def test_call_with_same_input_twice_cached_2d(
+            self, mock_layer_and_mock, Xs, ys):
+        layer = mock_layer_and_mock[0]
+        assert layer.transform._mock_call_count == 0
+
+        layer.fit_transform(Xs, ys)
+        assert layer.transform.cache_info().misses == 0
+        assert layer.transform.cache_info().hits == 0
+
+        layer.transform(Xs)
+        assert layer.transform.cache_info().misses == 1
+        assert layer.transform.cache_info().hits == 0
+
+        layer.transform(Xs)
+        assert layer.transform.cache_info().misses == 1
+        assert layer.transform.cache_info().hits == 1
+
+    def test_call_with_diff_input_twice_not_cached_2d(
+            self, mock_layer_and_mock, Xs, ys):
+        layer = mock_layer_and_mock[0]
+        assert layer.transform._mock_call_count == 0
+
+        layer.fit_transform(Xs, ys)
+        assert layer.transform.cache_info().misses == 0
+        assert layer.transform.cache_info().hits == 0
+
+        layer.transform(Xs)
+        assert layer.transform.cache_info().misses == 1
+        assert layer.transform.cache_info().hits == 0
+
+        Xs2 = tf.placeholder(dtype=tf.float32, shape=(None, 10))
+        layer.transform(Xs2)
+        assert layer.transform.cache_info().misses == 2
+        assert layer.transform.cache_info().hits == 0
 
 
 class TestLayerAddParam:

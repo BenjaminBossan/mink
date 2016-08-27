@@ -1,3 +1,5 @@
+from functools import lru_cache
+
 from sklearn.base import BaseEstimator
 from sklearn.base import TransformerMixin
 import tensorflow as tf
@@ -142,6 +144,17 @@ class Layer(BaseEstimator, TransformerMixin):
             if key.endswith('_'):
                 del state[key]
         return state
+
+    def __getattribute__(self, attr):
+        if attr != 'transform':
+            return object.__getattribute__(self, attr)
+
+        if not hasattr(self, '_transform'):
+            self._transform = lru_cache()(
+                object.__getattribute__(self, attr))
+            return self._transform
+        else:
+            return self._transform
 
 
 def _identity(X):
