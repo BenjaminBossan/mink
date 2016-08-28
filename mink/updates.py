@@ -8,7 +8,9 @@ __all__ = [
     'SGD',
     'Momentum',
     'Adam',
+    'Adadelta',
     'Adagrad',
+    'RMSProp',
 ]
 
 
@@ -60,6 +62,23 @@ class Adam(Update):
             learning_rate=self.learning_rate,
             beta1=self.beta1,
             beta2=self.beta2,
+        ).minimize(loss)
+        return train_step
+
+
+class Adadelta(Update):
+    def __init__(
+            self,
+            learning_rate=1.0,
+            rho=0.95,
+    ):
+        self.learning_rate = learning_rate
+        self.rho = rho
+
+    def __call__(self, loss):
+        train_step = tf.train.AdadeltaOptimizer(
+            learning_rate=self.learning_rate,
+            rho=self.rho,
         ).minimize(loss)
         return train_step
 
