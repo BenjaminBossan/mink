@@ -118,21 +118,30 @@ class IteratorPipeline(BaseEstimator, TransformerMixin):
         ).transform(
             X, y, **kwargs)
 
-    def __call__(self, X, y=None):
+    def __call__(self, *inputs):
         # pylint: disable=attribute-defined-outside-init
-        self.X_ = X
-        self.y_ = y
+        if isinstance(inputs, dict):
+            values = inputs.value()
+        else:
+            values = inputs
+        shapes = [value.shape[0] for value in values]
+        if len(set(shapes)) > 1:
+            raise ValueError("Inputs don't have compatible shapes: {}"
+                             "".format(', '.join(shapes)))
+
+        self.inputs_ = inputs
+        self.shape_ = shapes[0]
         return self
 
     def __iter__(self):
-        X, y, batch_size = self.X_, self.y_, self.batch_size
-        for i in range((X.shape[0] + batch_size - 1) // batch_size):
-            Xb = X[i * batch_size:(i + 1) * batch_size]
-            if y is not None:
-                yb = y[i * batch_size:(i + 1) * batch_size]
-            else:
-                yb = None
-            yield self.transform(Xb, yb)
+        inputs = self.inputs_
+        shape = self.shape_
+        batch_size = self.batch_size
+
+        for i in range((shape + batch_size - 1) // batch_size):
+            sl = slice(i * batch_size, (i + 1) * batch_size)
+            batches = [input[sl] for input in inputs]
+            yield self.transform(*batches)
 
     def __getstate__(self):
         state = dict(self.__dict__)
