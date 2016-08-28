@@ -5,3 +5,4 @@ from .input  import *
 from .merge import *
 from .noise import *
 from .pool import *
+from .recurrent import *
