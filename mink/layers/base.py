@@ -26,7 +26,8 @@ class Layer(BaseEstimator, TransformerMixin):
         for incoming in incomings:
             incoming.initialize(Xs, ys, **kwargs)
 
-        Xs_incs = [incoming.get_output(Xs, **kwargs) for incoming in incomings]
+        Xs_incs = tuple(  # use tuples because of caching
+            incoming.get_output(Xs, **kwargs) for incoming in incomings)
         if len(Xs_incs) == 1:
             Xs_incs = Xs_incs[0]
 
@@ -42,7 +43,8 @@ class Layer(BaseEstimator, TransformerMixin):
         if not isinstance(incomings, list):
             incomings = [incomings]
 
-        Xs_incs = [incoming.get_output(Xs, **kwargs) for incoming in incomings]
+        Xs_incs = tuple(  # use tuples because of caching
+            incoming.get_output(Xs, **kwargs) for incoming in incomings)
         if len(Xs_incs) == 1:
             Xs_incs = Xs_incs[0]
 
