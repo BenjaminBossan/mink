@@ -15,7 +15,7 @@ This is in very early stage of development. Help with development is welcome.
 For more elaborate use cases, see notebooks 
 [here](https://github.com/BenjaminBossan/mink/blob/master/notebooks/simple_CNN_01.ipynb),
 [here](https://github.com/BenjaminBossan/mink/blob/master/notebooks/simple_example_with_GS.ipynb), and
-[here](https://github.com/BenjaminBossan/mink/blob/master/notebooks/simple_example_recurrent_layers.ipynb).
+[here](https://github.com/BenjaminBossan/mink/blob/master/notebooks/simple_RNN.ipynb).
 
 ```
 from sklearn.datasets import make_classification
