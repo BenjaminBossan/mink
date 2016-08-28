@@ -13,9 +13,9 @@ This is in very early stage of development. Help with development is welcome.
 ## Example
 
 For more elaborate use cases, see notebooks 
-[here](https://github.com/BenjaminBossan/mink/blob/master/simple_CNN_01.ipynb)
-and
-[here](https://github.com/BenjaminBossan/mink/blob/master/simple_example_with_GS.ipynb).
+[here](https://github.com/BenjaminBossan/mink/blob/master/simple_CNN_01.ipynb),
+[here](https://github.com/BenjaminBossan/mink/blob/master/simple_example_with_GS.ipynb), and
+[here](https://github.com/BenjaminBossan/mink/blob/master/simple_example_recurrent_layers.ipynb).
 
 ```
 from sklearn.datasets import make_classification
