@@ -56,7 +56,7 @@ class Adam(Update):
         self.beta2 = beta2
 
     def __call__(self, loss):
-        train_step = tf.train.AdadeltaOptimizer(
+        train_step = tf.train.AdamOptimizer(
             learning_rate=self.learning_rate,
             beta1=self.beta1,
             beta2=self.beta2,
