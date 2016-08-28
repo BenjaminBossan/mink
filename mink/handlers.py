@@ -32,7 +32,7 @@ class Handler(BaseEstimator):
         raise NotImplementedError
 
 
-class PrintTrainProgress(object):
+class PrintTrainProgress(Handler):
     """Print training progress after each epoch."""
     def __init__(
             self,
@@ -87,7 +87,7 @@ class PrintTrainProgress(object):
         return out
 
 
-class PrintLayerInfo(object):
+class PrintLayerInfo(Handler):
     """Print basic information about the net's layers."""
     def __init__(self, tablefmt='pipe'):
         self.tablefmt = tablefmt

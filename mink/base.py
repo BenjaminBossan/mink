@@ -155,6 +155,10 @@ class NeuralNetBase(BaseEstimator, TransformerMixin):
         if y is not None and self.encoder:
             self.encoder.fit(y)
 
+        for callbacks in [self.on_training_started, self.on_epoch_finished]:
+            for handler in callbacks:
+                handler._clear()
+
         self.session_ = session
         self.tensorboard_logs_ = tensorboard_logs
         self.loss_ = loss
