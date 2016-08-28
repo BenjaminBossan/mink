@@ -2,7 +2,7 @@
 
 To achieve the goal of true sklearn compatibility, mink defines a
 layer to correspond to an sklearn transformer. This can be seen
-[here](https://github.com/BenjaminBossan/mink/blob/master/analogy_to_sklearn.ipynb).
+[here](https://github.com/BenjaminBossan/mink/blob/master/notebooks/analogy_to_sklearn.ipynb).
 
 Layers, as well as other components of mink (updates, nonlinearities,
 etc.), all inherit from sklearn's BaseEstimator. This allows us to use
