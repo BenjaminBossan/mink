@@ -1,6 +1,7 @@
 """Module contains estimators and the estimator base class."""
 
 from collections import defaultdict
+from collections import OrderedDict
 import time
 
 import numpy as np
@@ -155,9 +156,7 @@ class NeuralNetBase(BaseEstimator, TransformerMixin):
         if y is not None and self.encoder:
             self.encoder.fit(y)
 
-        for callbacks in [self.on_training_started, self.on_epoch_finished]:
-            for handler in callbacks:
-                handler._clear()
+        self._initialize_callbacks()
 
         self.session_ = session
         self.tensorboard_logs_ = tensorboard_logs
@@ -172,6 +171,21 @@ class NeuralNetBase(BaseEstimator, TransformerMixin):
 
     def _initialize_output_layer(self, layer, output_shape):
         raise NotImplementedError
+
+    def _initialize_callbacks(self):
+        self.on_training_started_ = self.on_training_started or []
+        if not any([isinstance(handler, handlers.PrintLayerInfo)
+                    for handler in self.on_training_started]):
+            self.on_training_started_.append(handlers.PrintLayerInfo())
+
+        self.on_epoch_finished_ = self.on_epoch_finished or []
+        if not any([isinstance(handler, handlers.PrintTrainProgress)
+                    for handler in self.on_epoch_finished]):
+            self.on_epoch_finished_.append(handlers.PrintTrainProgress())
+
+        for callbacks in [self.on_training_started_, self.on_epoch_finished_]:
+            for handler in callbacks:
+                handler._clear()
 
     def _get_input_shapes(self, X):
         if X is None:
@@ -300,12 +314,12 @@ class NeuralNetBase(BaseEstimator, TransformerMixin):
         return self
 
     def _callback_on_epoch_finished(self, state):
-        info = {
-            'epoch': state['epoch'] + 1,
+        info = OrderedDict([
+            ('epoch', state['epoch'] + 1),
             # TODO: should use np.average at some point
-            'train loss': np.mean(state['train_losses']),
-            'dur': time.time() - state['tic'],
-        }
+            ('train loss', np.mean(state['train_losses'])),
+            ('dur', time.time() - state['tic'])
+        ])
         self.train_history_.append(info)
         for func in self.on_epoch_finished:
             func(self)

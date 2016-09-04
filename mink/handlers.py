@@ -5,10 +5,13 @@ classes.
 
 from collections import OrderedDict
 import functools
+import itertools
 import operator
 import sys
 
+import numpy as np
 from sklearn.base import BaseEstimator
+from sklearn.metrics.scorer import check_scoring
 from tabulate import tabulate
 
 from mink.utils import get_all_layers
@@ -36,6 +39,8 @@ class PrintTrainProgress(Handler):
     """Print training progress after each epoch."""
     def __init__(
             self,
+            scores_to_minimize=None,
+            scores_to_maximize=None,
             tablefmt='pipe',
             floatfmt='.5f',
             first_iteration=True,
@@ -43,6 +48,15 @@ class PrintTrainProgress(Handler):
         self.tablefmt = tablefmt
         self.floatfmt = floatfmt
         self.first_iteration = first_iteration
+
+        self.scores_to_minimize = scores_to_minimize or ['train loss']
+        if 'train loss' not in self.scores_to_minimize:
+            self.scores_to_minimize.append('train loss')
+        self.scores_to_maximize = scores_to_maximize or []
+
+        self.min_scores = {key: np.inf for key in self.scores_to_minimize}
+        self.max_scores = {key: -np.inf for key in self.scores_to_maximize}
+        self.template = "{}{:" + self.floatfmt + "}{}"
 
     def _clear(self):
         self.first_iteration = True
@@ -55,24 +69,41 @@ class PrintTrainProgress(Handler):
         sys.stdout.flush()
 
     def table(self, history):
+        colors = itertools.cycle([
+            ansi.CYAN, ansi.GREEN, ansi.MAGENTA, ansi.RED])
         info = history[-1]
-        train_loss = info['train loss']
-        best_train_loss = train_loss <= min(
-            step['train loss'] for step in history)
 
-        info_tabulate = OrderedDict([
-            ('epoch', info['epoch']),
-            ('train loss', "{}{:.5f}{}".format(
-                ansi.CYAN if best_train_loss else "",
-                info['train loss'],
-                ansi.ENDC if best_train_loss else "",
-            )),
-            ('dur', info['dur']),
-        ])
+        for key in self.scores_to_minimize:
+            self.min_scores[key] = min(info[key], self.min_scores[key])
+
+        for key in self.scores_to_maximize:
+            self.max_scores[key] = max(info[key], self.max_scores[key])
+
+        table = [("epoch", info['epoch'])]
+
+        for key, val in info.items():
+            if key in ['epoch', 'dur']:
+                continue
+
+            is_best = None
+            if key in self.scores_to_minimize:
+                is_best = val == self.min_scores[key]
+                color = next(colors)
+            elif key in self.scores_to_maximize:
+                is_best = val == self.max_scores[key]
+                color = next(colors)
+
+            table.append((key, self.template.format(
+                color if is_best else "",
+                info[key],
+                ansi.ENDC if is_best else "",
+            )))
+
+        table.append(("dur", int(info['dur'])))
 
         tabulated = tabulate(
-            [info_tabulate],
-            headers="keys",
+            [OrderedDict(table)],
+            headers='keys',
             tablefmt=self.tablefmt,
             floatfmt=self.floatfmt,
         )
@@ -143,3 +174,29 @@ class PrintLayerInfo(Handler):
             tablefmt=self.tablefmt,
         )
         return layer_infos
+
+
+class ValidationScoreHandler(Handler):
+    def __init__(self, X, y, scoring, scoring_name=None):
+        self.X = X
+        self.y = y
+        self.scoring = scoring
+        self.scoring_name = scoring_name
+
+    def __call__(self, net):
+        scorer = check_scoring(net, scoring=self.scoring)
+        scoring_name = self.scoring_name or str(scorer)
+        score = scorer(net, self.X, self.y)
+
+        net.train_history_[-1][scoring_name] = score
+
+    def __repr__(self):
+        return "ValidationHandler({}, {})".format(
+            self.scoring,
+            self.scoring_name,
+        )
+
+    def __getstate__(self):
+        state = self.__dict__.copy()
+        del state['X'], state['y']
+        return state
