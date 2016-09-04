@@ -13,9 +13,10 @@ This is in very early stage of development. Help with development is welcome.
 ## Example
 
 For more elaborate use cases, see notebooks 
-[here](https://github.com/BenjaminBossan/mink/blob/master/notebooks/simple_CNN_01.ipynb),
-[here](https://github.com/BenjaminBossan/mink/blob/master/notebooks/simple_example_with_GS.ipynb), and
-[here](https://github.com/BenjaminBossan/mink/blob/master/notebooks/simple_RNN.ipynb).
+[here (CNN)](https://github.com/BenjaminBossan/mink/blob/master/notebooks/simple_CNN_01.ipynb),
+[here (RNN)](https://github.com/BenjaminBossan/mink/blob/master/notebooks/simple_RNN.ipynb),
+[here (grid search)](https://github.com/BenjaminBossan/mink/blob/master/notebooks/simple_example_with_GS.ipynb), and
+[here (validation scores)](https://github.com/BenjaminBossan/mink/blob/master/notebooks/using_validation_sets.ipynb).
 
 ```
 from sklearn.datasets import make_classification
