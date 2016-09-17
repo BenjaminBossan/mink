@@ -11,11 +11,20 @@ import sys
 
 import numpy as np
 from sklearn.base import BaseEstimator
+from sklearn.metrics import accuracy_score
+from sklearn.metrics import log_loss
+from sklearn.metrics import mean_squared_error
+from sklearn.metrics import r2_score
 from sklearn.metrics.scorer import check_scoring
 from tabulate import tabulate
 
 from mink.utils import get_all_layers
 from mink.utils import get_layer_name
+
+__all__ = [
+    'make_classification_callbacks',
+    'make_regression_callbacks',
+]
 
 
 class ansi:
@@ -200,3 +209,82 @@ class ValidationScoreHandler(Handler):
         state = self.__dict__.copy()
         del state['X'], state['y']
         return state
+
+
+class ClassificationScoreHandler(Handler):
+    def __init__(self, X, y):
+        self.X = X
+        self.y = y
+
+    def __call__(self, net):
+        y_proba = net.predict_proba(self.X)
+        y_pred = np.argmax(y_proba, axis=1)
+
+        logloss = log_loss(self.y, y_proba)
+        accuracy = accuracy_score(self.y, y_pred)
+
+        net.train_history_[-1]['valid loss'] = logloss
+        net.train_history_[-1]['valid acc'] = accuracy
+        net.train_history_[-1]['train/valid'] = (
+            net.train_history_[-1]['train loss'] /
+            net.train_history_[-1]['valid loss'])
+
+    def __repr__(self):
+        return "ClassificationScoreHandler({}, {})".format(
+            'valid loss',
+            'valid acc',
+        )
+
+    def __getstate__(self):
+        state = self.__dict__.copy()
+        del state['X'], state['y']
+        return state
+
+
+class RegressionScoreHandler(Handler):
+    def __init__(self, X, y):
+        self.X = X
+        self.y = y
+
+    def __call__(self, net):
+        y_pred = net.predict(self.X)
+
+        mse = mean_squared_error(self.y, y_pred)
+        r2 = r2_score(self.y, y_pred)
+
+        net.train_history_[-1]['valid loss'] = mse
+        net.train_history_[-1]['valid r2'] = r2
+        net.train_history_[-1]['train/valid'] = (
+            net.train_history_[-1]['train loss'] /
+            net.train_history_[-1]['valid loss'])
+
+    def __repr__(self):
+        return "ClassificationScoreHandler({}, {})".format(
+            'valid loss',
+            'valid r2',
+        )
+
+    def __getstate__(self):
+        state = self.__dict__.copy()
+        del state['X'], state['y']
+        return state
+
+
+def make_classification_callbacks(X, y):
+    classification_scores = ClassificationScoreHandler(X, y)
+    print_handler = PrintTrainProgress(
+        scores_to_minimize=['valid loss'],
+        scores_to_maximize=['valid acc']
+    )
+    callbacks = [classification_scores, print_handler]
+    return callbacks
+
+
+def make_regression_callbacks(X, y):
+    regression_scores = RegressionScoreHandler(X, y)
+    print_handler = PrintTrainProgress(
+        scores_to_minimize=['valid loss'],
+        scores_to_maximize=['valid r2']
+    )
+    callbacks = [regression_scores, print_handler]
+    return callbacks
