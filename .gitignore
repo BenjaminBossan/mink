@@ -1,13 +1,19 @@
 .coverage
 cache/
 
+*egg-info/
+.ipynb_checkpoints/
 bin/
 dist/
 docs/_build/
 include/
 lib/
+logs/
 man/
 __pycache__/
 
-*pyc
 *~
+*.pkl
+*.pyc
+Untitled*
+*-Copy*
